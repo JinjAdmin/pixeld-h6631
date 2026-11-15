@@ -422,9 +422,11 @@ static FILE *mic; static int mic_fd = -1;
 #define NFFT 512
 static int16_t abuf[NFFT]; static int an;
 static float bands[W], peaks[W], level;
-static int beats;  // counts detected beats (bass onsets); music styles compare it with their last seen value
+static int beats;  // counts detected beats (onsets); music styles compare it with their last seen value
+static float beat_strength;  // 0..1, how strong the last beat was
 #define MIC_GATE 12.0f      // dB above a band's noise floor before anything shows
 #define MIC_MINRANGE 40.0f  // dB: smallest range mapped to the full bar height (quiet sounds stay small)
+#define MIC_BEAT_K 1.5f     // a beat needs this many times the average spectral flux
 static double level_pub;
 
 static void mic_start(void) {
@@ -503,13 +505,26 @@ static void mic_read(void) {
             sum += bands[b];
         }
         level = fminf(1.0f, sum / W * 2.2f);  // ~0 silence, ~0.3 typing, ~0.8 music
-        // beat = sudden rise of the raw bass (bands ~120-250 Hz, before smoothing) over its recent average
+        // beat = onset across the whole spectrum ("spectral flux": how much louder the bands just got, from the
+        // raw values before smoothing), above an adaptive threshold. Bass-only detection missed most music on
+        // this small mic. While music plays, a beat is forced after 1.2 s without one so the effects never stall.
         {
-            static float bass_avg; static double last_beat;
-            float bass = 0; for (int b = 0; b < 8; b++) bass += ex[b] / ceil_db; bass /= 8;
+            static float prev_ex[W], flux_avg; static double last_beat, stat_t; static int stat_beats;
+            float flux = 0;
+            for (int b = 0; b < W; b++) { float d = ex[b] - prev_ex[b]; if (d > 0) flux += d; prev_ex[b] = ex[b]; }
+            flux /= ceil_db * W;  // 0 .. ~1
             double tn = now_s();
-            if (bass > 0.25f && bass > bass_avg + 0.12f && bass > bass_avg * 1.4f && tn - last_beat > 0.2) { beats++; last_beat = tn; }
-            bass_avg += (bass - bass_avg) * 0.08f;  // ~0.4 s memory at ~31 analyses per second
+            int onset = flux > flux_avg * MIC_BEAT_K + 0.01f && level > 0.12f && tn - last_beat > 0.15;
+            int forced = !onset && level > 0.25f && tn - last_beat > 1.2;
+            if (onset || forced) {
+                beats++; stat_beats++; last_beat = tn;
+                beat_strength = forced ? 0.5f : fminf(1.0f, flux / (flux_avg * MIC_BEAT_K + 0.01f) * 0.6f);
+            }
+            flux_avg += (flux - flux_avg) * 0.05f;  // ~0.6 s memory
+            if (tn - stat_t >= 10) {  // tuning aid: beat rate in the log while music mode runs
+                if (stat_t) logf_("music: %d beats in 10 s, level %.2f, flux avg %.3f", stat_beats, level, flux_avg);
+                stat_t = tn; stat_beats = 0;
+            }
         }
     }
 }
@@ -539,22 +554,63 @@ static void music_render(double t) {
             }
         }
         break;
-    case 2:  // explosion: rings burst from the centre on loud beats
+    case 2:  // explosion: colour flood like Govee's music "explosion" scene
         {
-            static float rings[8], ringh[8]; static int seen;
-            if (beats != seen) {  // a new beat: launch a ring
+            // Every beat starts a wavefront (diamond, square or circle) from an origin. The front is a solid band
+            // that stays at full brightness until it leaves the screen and paints over whatever it crosses; behind
+            // it the colour fades out, so the screen shows bands travelling outward. The origin stays for 2-6 beats
+            // (nested bands), then jumps (often to an edge/corner) and the shape changes.
+            // Stronger beats travel faster. Every pixel remembers the newest wave that painted it, and an older front
+            // can't repaint a newer wave's band or trail: when a fast wave overtakes an older one, the older one is
+            // absorbed instead of reappearing behind it, so the most recent wave always wins.
+            #define NWAVE 12
+            static struct { float x, y, r, v, band; int shape, on; uint32_t id; uint8_t c[3]; } wv[NWAVE];
+            static uint32_t owner[H][W], wave_id;
+            static int seen, next, left, shape; static float ox, oy, hue;
+            if (beats != seen) {
                 seen = beats;
-                for (int i = 0; i < 8; i++) if (rings[i] <= 0) { rings[i] = 0.1f; ringh[i] = (float)fmod(t * 0.1, 1.0); break; }
+                if (left <= 0) {  // new origin + shape
+                    left = 2 + rndi(5); shape = rndi(3);
+                    int edge = rndi(3);  // 2/3: on an edge or corner, 1/3: anywhere
+                    ox = rndi(W); oy = rndi(H);
+                    if (edge) { if (rndi(2)) ox = rndi(2) ? 0 : W - 1; else oy = rndi(2) ? 0 : H - 1; }
+                    hue = rndi(1000) / 1000.0f;
+                }
+                left--;
+                hue = fmodf(hue + 0.09f + rndi(40) / 1000.0f, 1);
+                __typeof__(wv[0]) *w = &wv[next]; next = (next + 1) % NWAVE;  // reuse the oldest
+                w->on = 1; w->x = ox; w->y = oy; w->r = 0; w->shape = shape; w->id = ++wave_id;
+                w->v = 0.9f + beat_strength * 0.9f;    // px per frame: stronger beats spread faster
+                w->band = 3 + beat_strength * 3;        // front thickness, px
+                hsv(hue, 1, 1, w->c);
             }
-            fade_fb(efb, 6, 10);
-            for (int i = 0; i < 8; i++) {
-                if (rings[i] <= 0) continue;
-                rings[i] += 1.2f; if (rings[i] > 34) { rings[i] = 0; continue; }
-                hsv(ringh[i], 1, 1 - rings[i] / 40, c);
-                for (int a = 0; a < 120; a++) { float an2 = a * 0.0524f; addpx(efb, 26 + (int)(cosf(an2) * rings[i]), 16 + (int)(sinf(an2) * rings[i] * 0.8f), c); }
+            fade_fb(efb, 9, 10);  // the trail behind each front fades in about a second
+            for (int n = 0; n < NWAVE; n++) {
+                int i = (next + n) % NWAVE;  // oldest first, newer waves paint on top
+                if (!wv[i].on) continue;
+                wv[i].r += wv[i].v;
+                float r = wv[i].r, cov = 0;  // cov: distance to the farthest corner in this wave's metric
+                for (int k = 0; k < 4; k++) {
+                    float dx = fabsf((k & 1 ? W - 1 : 0) - wv[i].x), dy = fabsf((k & 2 ? H - 1 : 0) - wv[i].y);
+                    float d = wv[i].shape == 0 ? dx + dy : wv[i].shape == 1 ? fmaxf(dx, dy) : sqrtf(dx * dx + dy * dy);
+                    if (d > cov) cov = d;
+                }
+                int x0 = (int)fmaxf(0, wv[i].x - r - 2), x1 = (int)fminf(W - 1, wv[i].x + r + 2);
+                int y0 = (int)fmaxf(0, wv[i].y - r - 2), y1 = (int)fminf(H - 1, wv[i].y + r + 2);
+                for (int y = y0; y <= y1; y++) for (int x = x0; x <= x1; x++) {
+                    float dx = fabsf(x - wv[i].x), dy = fabsf(y - wv[i].y);
+                    float d = wv[i].shape == 0 ? dx + dy : wv[i].shape == 1 ? fmaxf(dx, dy) : sqrtf(dx * dx + dy * dy);
+                    if (wv[i].id < owner[y][x]) continue;  // a newer wave owns this pixel
+                    uint8_t *q = &efb[(y * W + x) * 3];
+                    if (d <= r && d > r - wv[i].band) { memcpy(q, wv[i].c, 3); owner[y][x] = wv[i].id; }
+                    else if (d > r && d <= r + 1) {   // one-pixel soft edge ahead of the band (not owned yet)
+                        float a = 0.2f + 0.6f * (1 - (d - r));
+                        for (int k = 0; k < 3; k++) q[k] = (uint8_t)(wv[i].c[k] * a + q[k] * (1 - a));
+                    }
+                }
+                if (r - wv[i].band > cov + 1) wv[i].on = 0;  // the front has left the screen
             }
             memcpy(fb, efb, FRAME);
-            int r = (int)(level * 8); hsv((float)fmod(t * 0.1, 1.0), 1, 1, c); fill_rect(26 - r, 16 - r, r * 2, r * 2, c);
         }
         break;
     default:  // wave: mirrored spectrum around the middle line
@@ -605,23 +661,22 @@ static void draw_analog(void) {
     static const uint8_t hc[3] = {232, 189, 32}, mc[3] = {255, 255, 255}, cc[3] = {212, 0, 71}, sc[3] = {212, 0, 71};
     hand(cx, cy, (t.tm_min + t.tm_sec / 60.0f) * 6.0f, 11.5f, 0, mc);
     hand(cx - 0.5f, cy - 0.5f, ((t.tm_hour % 12) + t.tm_min / 60.0f) * 30.0f, 7.0f, 1, hc);
-    // seconds: a red dot running round the outside of the face. The ring is the set of transparent pixels
-    // touching the face disc (taken from the icon's alpha), so the dot hugs the rim without covering the
-    // 12/3/6/9 numerals; each second picks the ring pixel closest to its angle.
+    // seconds: a red dot running round the rim of the face. The ring is the face's outermost pixels (opaque
+    // pixels touching the outside, from the icon's alpha); the numerals and hour marks sit 2+ px further in, so
+    // the dot never covers them. Each second picks the ring pixel closest to its angle (60 distinct positions).
     static int ring[160][2], nring; static float ringa[160];
     icon_t *face = icon_get("clk_face");
     if (!nring && face) {
         const float ccx = 14.5f, ccy = 14.5f;  // the 30x30 face is centred between pixels 14 and 15
-        for (int y = -1; y <= face->h && nring < 160; y++)
-            for (int x = -1; x <= face->w && nring < 160; x++) {
-                int in = x >= 0 && y >= 0 && x < face->w && y < face->h && face->rgba[(y * face->w + x) * 4 + 3] >= 128;
-                if (in) continue;
-                int touch = 0;
+        for (int y = 0; y < face->h && nring < 160; y++)
+            for (int x = 0; x < face->w && nring < 160; x++) {
+                if (face->rgba[(y * face->w + x) * 4 + 3] < 128) continue;
+                int edge = 0;
                 for (int dy = -1; dy <= 1; dy++) for (int dx = -1; dx <= 1; dx++) {
                     int X = x + dx, Y = y + dy;
-                    if (X >= 0 && Y >= 0 && X < face->w && Y < face->h && face->rgba[(Y * face->w + X) * 4 + 3] >= 128) touch = 1;
+                    if (X < 0 || Y < 0 || X >= face->w || Y >= face->h || face->rgba[(Y * face->w + X) * 4 + 3] < 128) edge = 1;
                 }
-                if (!touch) continue;
+                if (!edge) continue;
                 ring[nring][0] = x; ring[nring][1] = y;
                 ringa[nring++] = atan2f(x - ccx, -(y - ccy));  // 0 at 12 o'clock, clockwise
             }
