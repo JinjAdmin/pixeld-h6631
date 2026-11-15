@@ -1,0 +1,15 @@
+# your device's secrets and dumps never belong in the repo
+private/
+backup/
+logs/
+*.bin
+# build output
+build/
+firmware/out/
+# Govee artwork and anything converted from it (import it on your own device with pixel2mqtt)
+*.anim
+*.pxi
+*.clock
+*.gif
+*.png
+__pycache__/

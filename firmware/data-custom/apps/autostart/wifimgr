@@ -1,0 +1,102 @@
+#!/bin/sh
+# wifimgr: keep Wi-Fi connected; fall back to a setup hotspot when it can't connect.
+#  - normal: watch wlan0. No IPv4 for $LIMIT s, or /tmp/wifi_setup_request exists -> setup.
+#  - setup:  hotspot "govee-pixel-setup" (WPA2, random 8-digit password shown on the panel),
+#            dnsmasq hands out 192.168.4.x and answers every DNS name with 192.168.4.1 so
+#            phones open pixeld's setup page. pixeld saves /data/custom/wpa_supplicant.conf and
+#            touches /tmp/wifi_apply. After $AP_TIME s without a new config (and no phone
+#            connected) it goes back to trying the saved network, so a router outage
+#            doesn't strand the light in setup mode.
+# Status for pixeld in /tmp/wifi_mode: "normal" | "setup <password>" | "connecting <ssid>"
+C=/data/custom
+CONF=$C/wpa_supplicant.conf
+MODE=/tmp/wifi_mode
+LIMIT=120
+AP_TIME=600
+AP_SSID=govee-pixel-setup
+
+log() { echo "$(date '+%F %T') wifimgr: $*"; }
+has_ip() { ip -4 addr show wlan0 2>/dev/null | grep -q 'inet '; }
+
+station_start() {
+    killall hostapd dnsmasq 2>/dev/null
+    killall wpa_supplicant udhcpc 2>/dev/null
+    sleep 1
+    ip addr flush dev wlan0
+    if [ -f $CONF ]; then
+        mkdir -p /var/run/wpa_supplicant
+        ifconfig wlan0 up
+        wpa_supplicant -B -Dnl80211 -iwlan0 -c $CONF
+        udhcpc -i wlan0 -b -R -x hostname:"$(hostname)" > /dev/null 2>&1
+    fi
+}
+
+setup_start() {
+    # remember nearby networks for the setup page's list
+    if pidof wpa_supplicant > /dev/null; then
+        wpa_cli -i wlan0 scan > /dev/null 2>&1; sleep 4
+        wpa_cli -i wlan0 scan_results 2>/dev/null | awk -F'\t' 'NR>1 && $5!="" {print $3 "\t" $5}' \
+            | sort -rn | awk -F'\t' '!seen[$2]++ {print $2}' | head -20 > /tmp/wifi_scan.txt
+    fi
+    killall wpa_supplicant udhcpc 2>/dev/null
+    sleep 1
+    PASS=$(tr -dc 0-9 < /dev/urandom | head -c 8)
+    cat > /tmp/hostapd-setup.conf <<EOF
+interface=wlan0
+driver=nl80211
+ssid=$AP_SSID
+hw_mode=g
+channel=6
+wpa=2
+wpa_passphrase=$PASS
+wpa_key_mgmt=WPA-PSK
+rsn_pairwise=CCMP
+
+EOF
+    ip addr flush dev wlan0
+    ifconfig wlan0 192.168.4.1 netmask 255.255.255.0 up
+    hostapd -B /tmp/hostapd-setup.conf
+    dnsmasq --conf-file=/dev/null --no-resolv --interface=wlan0 --bind-interfaces \
+        --dhcp-range=192.168.4.10,192.168.4.50,10m --address=/#/192.168.4.1 \
+        --dhcp-option=3,192.168.4.1 --dhcp-option=6,192.168.4.1 \
+        --dhcp-option=114,http://192.168.4.1/ \
+        --dhcp-leasefile=/tmp/dnsmasq-setup.leases --pid-file=/tmp/dnsmasq-setup.pid
+    echo "setup $PASS" > $MODE
+    log "setup hotspot $AP_SSID up"
+}
+
+ap_has_clients() { iw dev wlan0 station dump 2>/dev/null | grep -q '^Station'; }
+
+echo normal > $MODE
+rm -f /tmp/wifi_setup_request /tmp/wifi_apply
+[ -f $CONF ] || touch /tmp/wifi_setup_request
+last_ok=$(date +%s)
+while true; do
+    now=$(date +%s)
+    # date jumps when NTP first syncs; keep the timer sane
+    [ $((now - last_ok)) -lt 0 ] || [ $((now - last_ok)) -gt 100000 ] && last_ok=$now
+    if has_ip; then last_ok=$now; fi
+    if [ -f /tmp/wifi_setup_request ] || [ $((now - last_ok)) -gt $LIMIT ]; then
+        rm -f /tmp/wifi_setup_request /tmp/wifi_apply
+        log "no Wi-Fi for $((now - last_ok)) s or setup requested -> setup mode"
+        setup_start
+        start=$(date +%s)
+        while true; do
+            sleep 3
+            [ -f /tmp/wifi_apply ] && { log "new Wi-Fi config received"; break; }
+            t=$(date +%s)
+            if ap_has_clients; then start=$t; fi
+            [ $((t - start)) -gt $AP_TIME ] && { log "setup timed out, retrying saved network"; break; }
+            [ $((t - start)) -lt 0 ] && start=$t
+        done
+        rm -f /tmp/wifi_apply
+        echo "connecting $(sed -n 's/^[[:space:]]*#ssid_text=//p' $CONF 2>/dev/null | head -1)" > $MODE
+        station_start
+        last_ok=$(date +%s)
+        # wait for the result, then show normal again either way (the loop re-enters setup on failure)
+        i=0; while [ $i -lt 40 ] && ! has_ip; do sleep 3; i=$((i + 1)); done
+        has_ip && log "connected: $(ip -4 addr show wlan0 | sed -n 's/.*inet \([0-9.]*\).*/\1/p')"
+        echo normal > $MODE
+    fi
+    sleep 5
+done

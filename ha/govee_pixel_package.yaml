@@ -1,0 +1,159 @@
+# Govee Pixel (custom firmware) - Home Assistant package
+#
+# Install: copy to <config>/packages/govee_pixel.yaml and make sure configuration.yaml has
+#   homeassistant:
+#     packages: !include_dir_named packages
+# then edit every line marked  # <-- CHANGE  and restart Home Assistant.
+#
+# The light shows these on its "info" screens (Mode = info, or a playlist with "info:SECONDS").
+# Topics it understands (JSON payloads, publish with mqtt.publish):
+#   govee-pixel/weather/set  {"condition": "<HA weather state>", "temp": 12.4, "unit": "°C", "high": 15, "low": 6, "humidity": 71}
+#   govee-pixel/climate/set  {"name": "Living", "temp": 21.5, "unit": "°C", "humidity": 44}  (up to 6 rooms; unit optional)
+#   govee-pixel/stock/set    {"symbol": "AAPL", "price": "189.20", "change": -1.25}  (change in %, up to 6)
+#   govee-pixel/score/set    {"league": "NFL"|"NBA", "away": "BUF", "home": "KC", "away_score": 17, "home_score": 21, "status": "Q3 5:12"}
+#   any of the above with "remove": 1 deletes that entry; data older than a few hours is hidden automatically.
+# Other useful topics:
+#   govee-pixel/notify/set   {"message": "...", "duration": 15, "color": "#ff3300", "sound": "Ding Dong", "animation": "Danger Approaching"}
+#   govee-pixel/countdown/set "5:00" | "300" | "stop"        govee-pixel/stopwatch/set start|stop|toggle|reset
+#   govee-pixel/effect/set "Snake"   govee-pixel/animation/set "Lighthouse"   govee-pixel/music_style/set "Fire"
+#   govee-pixel/playlist/set "clock:30,info:40,effect:Flow:20,animation:Victory:15,music:Spectrum:30,text:Hello:10"
+
+automation:
+  - id: govee_pixel_weather
+    alias: "Govee Pixel: send weather"
+    mode: restart
+    triggers:
+      - trigger: time_pattern
+        minutes: "/15"
+      - trigger: state
+        entity_id: weather.forecast_home                                   # <-- CHANGE (your weather entity)
+      - trigger: homeassistant
+        event: start
+    actions:
+      - action: weather.get_forecasts
+        target:
+          entity_id: weather.forecast_home                                 # <-- CHANGE
+        data:
+          type: daily
+        response_variable: fc
+      - action: mqtt.publish
+        data:
+          topic: govee-pixel/weather/set
+          retain: true                     # the light gets the last weather immediately after a restart
+          payload: >-
+            {% set w = 'weather.forecast_home' %}{# <-- CHANGE #}
+            {% set today = fc[w].forecast[0] if fc[w].forecast | count > 0 else {} %}
+            {{ {"condition": states(w),
+                "temp": state_attr(w, 'temperature') | float(0),
+                "unit": state_attr(w, 'temperature_unit'),
+                "humidity": state_attr(w, 'humidity') | int(-1),
+                "high": today.temperature | default(none),
+                "low": today.templow | default(none)} | to_json }}
+
+  - id: govee_pixel_climate
+    alias: "Govee Pixel: send room climate"
+    mode: queued
+    triggers:
+      - trigger: time_pattern
+        minutes: "/5"
+      - trigger: homeassistant
+        event: start
+    variables:
+      rooms:                                                      # <-- CHANGE (name shown on the panel, max ~8 chars)
+        - name: Living
+          temp: sensor.living_room_temperature
+          humidity: sensor.living_room_humidity
+        - name: Bedroom
+          temp: sensor.bedroom_temperature
+          humidity: sensor.bedroom_humidity
+    actions:
+      - repeat:
+          for_each: "{{ rooms }}"
+          sequence:
+            - condition: template
+              value_template: "{{ states(repeat.item.temp) | is_number }}"
+            - action: mqtt.publish
+              data:
+                topic: govee-pixel/climate/set
+                payload: >-
+                  {{ {"name": repeat.item.name,
+                      "temp": states(repeat.item.temp) | float,
+                      "unit": state_attr(repeat.item.temp, 'unit_of_measurement'),
+                      "humidity": states(repeat.item.humidity) | int(-1)} | to_json }}
+
+  # Air quality alert: flash + sound when CO2 is high (example)
+  - id: govee_pixel_co2_alert
+    alias: "Govee Pixel: CO2 alert"
+    triggers:
+      - trigger: numeric_state
+        entity_id: sensor.living_room_co2                         # <-- CHANGE (or remove this automation)
+        above: 1200
+    actions:
+      - action: mqtt.publish
+        data:
+          topic: govee-pixel/notify/set
+          payload: >-
+            {{ {"message": "CO2 " ~ states('sensor.living_room_co2') ~ " ppm - open a window",
+                "duration": 30, "color": "#ff8800", "sound": "Tech"} | to_json }}
+
+  # Front door: animation + chime (example)
+  - id: govee_pixel_front_door
+    alias: "Govee Pixel: someone at the door"
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.front_door_motion                # <-- CHANGE (doorbell / motion / contact sensor)
+        to: "on"
+    actions:
+      - action: mqtt.publish
+        data:
+          topic: govee-pixel/notify/set
+          payload: '{"message": "Someone at the front door", "duration": 20, "animation": "Danger Approaching", "sound": "Ding Dong"}'
+
+  # Stocks (example with any sensor whose state is the price and that has a percent-change attribute)
+  - id: govee_pixel_stocks
+    alias: "Govee Pixel: send stock prices"
+    triggers:
+      - trigger: time_pattern
+        minutes: "/10"
+    variables:
+      stocks:                                                     # <-- CHANGE or delete this automation
+        - symbol: AAPL
+          entity: sensor.apple_stock
+          change_attr: change_percent
+    actions:
+      - repeat:
+          for_each: "{{ stocks }}"
+          sequence:
+            - condition: template
+              value_template: "{{ states(repeat.item.entity) | is_number }}"
+            - action: mqtt.publish
+              data:
+                topic: govee-pixel/stock/set
+                payload: >-
+                  {{ {"symbol": repeat.item.symbol,
+                      "price": "%.2f" | format(states(repeat.item.entity) | float),
+                      "change": state_attr(repeat.item.entity, repeat.item.change_attr) | float(0)} | to_json }}
+
+  # Sports scores (example for the "Team Tracker" HACS integration; any source works)
+  - id: govee_pixel_scores
+    alias: "Govee Pixel: send game score"
+    triggers:
+      - trigger: state
+        entity_id: sensor.team_tracker_kc                         # <-- CHANGE or delete this automation
+    conditions:
+      - condition: template
+        value_template: "{{ states('sensor.team_tracker_kc') in ['PRE', 'IN', 'POST'] }}"
+    actions:
+      - variables:
+          s: sensor.team_tracker_kc
+          home: "{{ state_attr(s, 'team_homeaway') == 'home' }}"
+      - action: mqtt.publish
+        data:
+          topic: govee-pixel/score/set
+          payload: >-
+            {% set mine = state_attr(s, 'team_abbr') %}{% set opp = state_attr(s, 'opponent_abbr') %}
+            {% set ms = state_attr(s, 'team_score') | int(0) %}{% set os = state_attr(s, 'opponent_score') | int(0) %}
+            {{ {"league": state_attr(s, 'league') | default('NFL'),
+                "home": mine if home else opp, "away": opp if home else mine,
+                "home_score": ms if home else os, "away_score": os if home else ms,
+                "status": (state_attr(s, 'clock') | default(states(s)))[:12]} | to_json }}

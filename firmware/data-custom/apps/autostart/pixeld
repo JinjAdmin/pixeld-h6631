@@ -1,0 +1,11 @@
+#!/bin/sh
+# autostart: pixeld display daemon (MQTT/Home Assistant + UDP frames + clock)
+# time zone: POSIX TZ string in /data/custom/tz, e.g. EST5EDT,M3.2.0,M11.1.0 (default UTC)
+export TZ="$(cat /data/custom/tz 2>/dev/null || echo UTC0)"
+LOG=/data/custom/pixeld.log
+[ -f $LOG ] && [ $(wc -c < $LOG) -gt 262144 ] && mv $LOG $LOG.old
+while true; do
+    /data/custom/apps/pixeld >> $LOG 2>&1
+    echo "pixeld exited ($?), restarting in 5 s" >> $LOG
+    sleep 5
+done
