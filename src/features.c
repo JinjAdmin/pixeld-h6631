@@ -4,7 +4,8 @@
 // draw_scroll, anim_*, st, play_sound, mq_pub, json_str (forward-declared there).
 #include <math.h>
 
-// Blink/frame phase from the absolute time. Never cast t * hz to int/long directly: t is ~1.7e9 s, so
+// Blink/frame phase from the absolute time. Never cast t * hz to int/long directly (or to float: a float
+// near 1.7e8 has a resolution of 16, so hues built from (float)(t * k) never change): t is ~1.7e9 s, so
 // t * 2 already overflows a 32-bit int (and t * 1000 a 32-bit long) on the ARM build; the conversion then
 // saturates to a constant and the animation freezes.
 static int phase(double t, double hz, int n) { return (int)fmod(t * hz, (double)n); }
@@ -421,6 +422,7 @@ static FILE *mic; static int mic_fd = -1;
 #define NFFT 512
 static int16_t abuf[NFFT]; static int an;
 static float bands[W], peaks[W], level;
+static int beats;  // counts detected beats (bass onsets); music styles compare it with their last seen value
 #define MIC_GATE 12.0f      // dB above a band's noise floor before anything shows
 #define MIC_MINRANGE 40.0f  // dB: smallest range mapped to the full bar height (quiet sounds stay small)
 static double level_pub;
@@ -501,6 +503,14 @@ static void mic_read(void) {
             sum += bands[b];
         }
         level = fminf(1.0f, sum / W * 2.2f);  // ~0 silence, ~0.3 typing, ~0.8 music
+        // beat = sudden rise of the raw bass (bands ~120-250 Hz, before smoothing) over its recent average
+        {
+            static float bass_avg; static double last_beat;
+            float bass = 0; for (int b = 0; b < 8; b++) bass += ex[b] / ceil_db; bass /= 8;
+            double tn = now_s();
+            if (bass > 0.25f && bass > bass_avg + 0.12f && bass > bass_avg * 1.4f && tn - last_beat > 0.2) { beats++; last_beat = tn; }
+            bass_avg += (bass - bass_avg) * 0.08f;  // ~0.4 s memory at ~31 analyses per second
+        }
     }
 }
 
@@ -531,9 +541,11 @@ static void music_render(double t) {
         break;
     case 2:  // explosion: rings burst from the centre on loud beats
         {
-            static float rings[8], ringh[8]; static float last;
-            if (level > 0.45f && level > last * 1.3f) for (int i = 0; i < 8; i++) if (rings[i] <= 0) { rings[i] = 0.1f; ringh[i] = (float)(t * 0.1); break; }
-            last = last * 0.9f + level * 0.1f;
+            static float rings[8], ringh[8]; static int seen;
+            if (beats != seen) {  // a new beat: launch a ring
+                seen = beats;
+                for (int i = 0; i < 8; i++) if (rings[i] <= 0) { rings[i] = 0.1f; ringh[i] = (float)fmod(t * 0.1, 1.0); break; }
+            }
             fade_fb(efb, 6, 10);
             for (int i = 0; i < 8; i++) {
                 if (rings[i] <= 0) continue;
@@ -542,13 +554,13 @@ static void music_render(double t) {
                 for (int a = 0; a < 120; a++) { float an2 = a * 0.0524f; addpx(efb, 26 + (int)(cosf(an2) * rings[i]), 16 + (int)(sinf(an2) * rings[i] * 0.8f), c); }
             }
             memcpy(fb, efb, FRAME);
-            int r = (int)(level * 8); hsv((float)(t * 0.1), 1, 1, c); fill_rect(26 - r, 16 - r, r * 2, r * 2, c);
+            int r = (int)(level * 8); hsv((float)fmod(t * 0.1, 1.0), 1, 1, c); fill_rect(26 - r, 16 - r, r * 2, r * 2, c);
         }
         break;
     default:  // wave: mirrored spectrum around the middle line
         for (int x = 0; x < W; x++) {
             int h = (int)(bands[x] * 15);
-            hsv((float)(x / (float)W + t * 0.05), 1, 1, c);
+            hsv(x / (float)W + (float)fmod(t * 0.05, 1.0), 1, 1, c);
             for (int y = -h; y <= h; y++) px(x, 16 + y, c);
         }
         break;
@@ -593,9 +605,35 @@ static void draw_analog(void) {
     static const uint8_t hc[3] = {232, 189, 32}, mc[3] = {255, 255, 255}, cc[3] = {212, 0, 71}, sc[3] = {212, 0, 71};
     hand(cx, cy, (t.tm_min + t.tm_sec / 60.0f) * 6.0f, 11.5f, 0, mc);
     hand(cx - 0.5f, cy - 0.5f, ((t.tm_hour % 12) + t.tm_min / 60.0f) * 30.0f, 7.0f, 1, hc);
-    // seconds: a red dot running round the rim
-    float sa = t.tm_sec * 6.0f * (float)M_PI / 180.0f;
-    px((int)floorf(cx + 13.0f * sinf(sa)), (int)floorf(cy - 13.0f * cosf(sa)), sc);
+    // seconds: a red dot running round the outside of the face. The ring is the set of transparent pixels
+    // touching the face disc (taken from the icon's alpha), so the dot hugs the rim without covering the
+    // 12/3/6/9 numerals; each second picks the ring pixel closest to its angle.
+    static int ring[160][2], nring; static float ringa[160];
+    icon_t *face = icon_get("clk_face");
+    if (!nring && face) {
+        const float ccx = 14.5f, ccy = 14.5f;  // the 30x30 face is centred between pixels 14 and 15
+        for (int y = -1; y <= face->h && nring < 160; y++)
+            for (int x = -1; x <= face->w && nring < 160; x++) {
+                int in = x >= 0 && y >= 0 && x < face->w && y < face->h && face->rgba[(y * face->w + x) * 4 + 3] >= 128;
+                if (in) continue;
+                int touch = 0;
+                for (int dy = -1; dy <= 1; dy++) for (int dx = -1; dx <= 1; dx++) {
+                    int X = x + dx, Y = y + dy;
+                    if (X >= 0 && Y >= 0 && X < face->w && Y < face->h && face->rgba[(Y * face->w + X) * 4 + 3] >= 128) touch = 1;
+                }
+                if (!touch) continue;
+                ring[nring][0] = x; ring[nring][1] = y;
+                ringa[nring++] = atan2f(x - ccx, -(y - ccy));  // 0 at 12 o'clock, clockwise
+            }
+    }
+    if (nring) {
+        float want = t.tm_sec * 6.0f * (float)M_PI / 180.0f, best = 1e9f; int bi = 0;
+        for (int i = 0; i < nring; i++) {
+            float d = fabsf(remainderf(ringa[i] - want, 2 * (float)M_PI));
+            if (d < best) { best = d; bi = i; }
+        }
+        px(fx + ring[bi][0], fy + ring[bi][1], sc);
+    }
     for (int j = 0; j < 2; j++) for (int i = 0; i < 2; i++) px(fx + 14 + i, fy + 14 + j, cc);
 }
 
