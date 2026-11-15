@@ -420,7 +420,9 @@ static const char *MUSIC_STYLES[] = {"Spectrum", "Fire", "Explosion", "Wave"};
 static FILE *mic; static int mic_fd = -1;
 #define NFFT 512
 static int16_t abuf[NFFT]; static int an;
-static float bands[W], peaks[W], level, agc = 2000;
+static float bands[W], peaks[W], level;
+#define MIC_GATE 12.0f      // dB above a band's noise floor before anything shows
+#define MIC_MINRANGE 40.0f  // dB: smallest range mapped to the full bar height (quiet sounds stay small)
 static double level_pub;
 
 static void mic_start(void) {
@@ -459,22 +461,46 @@ static void mic_read(void) {
         an += (int)(r / 2);
         if (an < NFFT) continue;
         an = 0;
-        static float re[NFFT], im[NFFT]; float pk = 0, sum = 0;
+        // Tuned on recordings from this mic (silence / typing / music, 2026-11-15): each band is measured in dB
+        // above its own learned noise floor (room hum sits ~30 dB at 60-90 Hz), a gate hides room noise and typing
+        // clicks, and an auto ceiling (fast attack, slow release, >= MIC_MINRANGE dB) scales music to the height.
+        static float re[NFFT], im[NFFT], floor_db[W], ceil_db = MIC_MINRANGE; static int edges[W + 1], init;
+        if (!init) {  // contiguous log-spaced bands 120 Hz .. 6.5 kHz (bin = 31.25 Hz), at least one bin each
+            init = 1; int prev = (int)(120.0f / (16000.0f / NFFT));
+            for (int b = 0; b <= W; b++) {
+                int e = (int)lroundf(120.0f * powf(6500.0f / 120.0f, b / (float)W) / (16000.0f / NFFT));
+                if (b && e <= prev) e = prev + 1;
+                edges[b] = prev = e;
+            }
+            for (int b = 0; b < W; b++) floor_db[b] = 25;
+        }
+        float mean = 0;
+        for (int i = 0; i < NFFT; i++) mean += abuf[i];
+        mean /= NFFT;
         for (int i = 0; i < NFFT; i++) {
             float w = 0.5f - 0.5f * cosf(2 * (float)M_PI * i / (NFFT - 1));
-            re[i] = abuf[i] * w; im[i] = 0; float a = fabsf((float)abuf[i]); if (a > pk) pk = a; sum += a;
+            re[i] = (abuf[i] - mean) * w; im[i] = 0;
         }
-        agc = agc * 0.995f + (pk > agc ? (pk - agc) * 0.2f : 0); if (agc < 600) agc = 600;
-        level = fminf(1.0f, sum / NFFT / (agc * 0.35f));
         fft(re, im, NFFT);
-        // 52 log-spaced bands from ~60 Hz to ~7 kHz (bin = 31.25 Hz)
+        float ex[W], top = 0, sum = 0;
         for (int b = 0; b < W; b++) {
-            int lo = (int)(2 * powf(110.0f, b / (float)W)), hi = (int)(2 * powf(110.0f, (b + 1) / (float)W)); if (hi <= lo) hi = lo + 1;
-            float m = 0; for (int k = lo; k < hi && k < NFFT / 2; k++) { float v = sqrtf(re[k] * re[k] + im[k] * im[k]); if (v > m) m = v; }
-            float v = fminf(1.0f, log10f(1 + m / agc * 2.0f) * 1.2f);
-            bands[b] = v > bands[b] ? v : bands[b] * 0.85f;
-            peaks[b] = bands[b] > peaks[b] ? bands[b] : peaks[b] - 0.01f;
+            float m = 0;
+            for (int k = edges[b]; k < edges[b + 1] && k < NFFT / 2; k++) { float v = sqrtf(re[k] * re[k] + im[k] * im[k]); if (v > m) m = v; }
+            float db = 20 * log10f(m / (NFFT / 4) + 1e-3f);                         // ~dB of the sine amplitude
+            if (db < floor_db[b]) floor_db[b] += (db - floor_db[b]) * 0.1f;        // floor falls fast (~0.3 s)
+            else floor_db[b] += 0.01f;                                              // and rises ~0.3 dB/s
+            if (floor_db[b] > 35) floor_db[b] = 35;                                 // continuous music never becomes "floor"
+            ex[b] = fmaxf(0, db - floor_db[b] - MIC_GATE);
+            if (ex[b] > top) top = ex[b];
         }
+        ceil_db = top > ceil_db ? top : fmaxf(MIC_MINRANGE, ceil_db - 0.05f);      // release ~1.5 dB/s
+        for (int b = 0; b < W; b++) {
+            float v = fminf(1.0f, ex[b] / (ceil_db * 0.9f));
+            bands[b] = v > bands[b] ? bands[b] + (v - bands[b]) * 0.5f : bands[b] * 0.85f;  // soft attack damps clicks
+            peaks[b] = bands[b] > peaks[b] ? bands[b] : peaks[b] - 0.01f;
+            sum += bands[b];
+        }
+        level = fminf(1.0f, sum / W * 2.2f);  // ~0 silence, ~0.3 typing, ~0.8 music
     }
 }
 
