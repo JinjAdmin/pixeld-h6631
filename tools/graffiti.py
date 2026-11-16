@@ -23,15 +23,24 @@ import struct
 from minipng import read_png
 
 W, H = 52, 32
-# Govee moves the *source offset* (screen = image[pos + offset]), so the picture travels opposite to the
-# offset change: K=1 (offset y-1) moves the image DOWN. Confirmed on the panel: Gliding (parachute, K=1) must fall.
+# Motion direction K -> screen direction (dx, dy) in timed ("combo", type != 0) scenes. Govee moves the *source
+# offset* there, so the picture travels opposite to the offset change: K=1 moves the image DOWN. Confirmed on the
+# panel: Gliding (parachute, type 0xff, K=1) must fall.
+# Plain stacked scenes (type 0) move the other way: K=1 moves UP. Confirmed with Govee-app scenes: smoke (K=1) must
+# rise out of a pipe, leaves (K=8) must fall. Item.flip marks type-0 items.
 DX = {0: (0, 0), 1: (0, 1), 2: (0, -1), 3: (1, 0), 4: (-1, 0), 5: (1, 1), 6: (-1, 1), 7: (1, -1), 8: (-1, -1)}
+
+
+def direction(K, flip=False):
+    dx, dy = DX.get(K, (0, 0))
+    return (-dx, -dy) if flip else (dx, dy)
 
 
 class Item:
     def __init__(self, rows, K, A, B, C, D, E):
         self.rows, self.K, self.A, self.B, self.C, self.D, self.E = rows, K, A, B, C, D, E
         self.h, self.w = len(rows), len(rows[0])
+        self.flip = False   # set for type-0 scenes (see DX)
 
     def step_ms(self):
         # speed 0-100 -> ms per pixel step (tuned by eye; 100 = fastest)
@@ -59,7 +68,9 @@ def parse_graffiti(d: bytes):
             D = d[pos + 4] | (d[pos + 5] << 8)
             E = d[pos + 6]
             pos += 8
-            items.append(Item(read_png(png)[2], K, A, B, C, D, E))
+            it = Item(read_png(png)[2], K, A, B, C, D, E)
+            it.flip = gtype == 0
+            items.append(it)
         groups.append(items)
     return bg, gtype, groups
 
@@ -109,8 +120,8 @@ def _draw(canvas, it: Item, ox: int, oy: int, tile: bool):
 class Track:
     """Continuous scrolling motion for one item (or a whole timed frame group)."""
 
-    def __init__(self, K, span, rate):
-        self.dx, self.dy = DX.get(K, (0, 0))
+    def __init__(self, K, span, rate, flip=False):
+        self.dx, self.dy = direction(K, flip)
         self.span, self.rate = span, rate      # rate in px per ms
 
     def period(self):
@@ -132,10 +143,10 @@ def _track_for(items):
     if not moving or len(moving) * 2 < len(items):
         return Track(0, 1, 0)
     it0 = moving[0]
-    dx, dy = DX.get(it0.K, (0, 0))
+    dx, dy = direction(it0.K, it0.flip)
     span = max(it0.w if dx else 0, it0.h if dy else 0)
     rate = sum(1.0 / it.step_ms() for it in moving) / len(moving)
-    return Track(it0.K, span, rate)
+    return Track(it0.K, span, rate, it0.flip)
 
 
 def render(d: bytes, tick_ms: int = 33, max_frames: int = 450):
