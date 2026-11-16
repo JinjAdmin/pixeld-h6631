@@ -559,7 +559,7 @@ static void music_render(double t) {
             // Every beat starts a wavefront (diamond, square or circle) from an origin. The front is a solid band
             // that stays at full brightness until it leaves the screen and paints over whatever it crosses; behind
             // it the colour fades out, so the screen shows bands travelling outward. The origin stays for 2-6 beats
-            // (nested bands), then jumps (often to an edge/corner) and the shape changes.
+            // (nested bands), then jumps (often to an edge/corner). Each beat picks a new shape, never the same as the last.
             // Stronger beats travel faster. Every pixel remembers the newest wave that painted it, and an older front
             // can't repaint a newer wave's band or trail: when a fast wave overtakes an older one, the older one is
             // absorbed instead of reappearing behind it, so the most recent wave always wins.
@@ -569,14 +569,15 @@ static void music_render(double t) {
             static int seen, next, left, shape; static float ox, oy, hue;
             if (beats != seen) {
                 seen = beats;
-                if (left <= 0) {  // new origin + shape
-                    left = 2 + rndi(5); shape = rndi(3);
+                if (left <= 0) {  // new origin
+                    left = 2 + rndi(5);
                     int edge = rndi(3);  // 2/3: on an edge or corner, 1/3: anywhere
                     ox = rndi(W); oy = rndi(H);
                     if (edge) { if (rndi(2)) ox = rndi(2) ? 0 : W - 1; else oy = rndi(2) ? 0 : H - 1; }
                     hue = rndi(1000) / 1000.0f;
                 }
                 left--;
+                shape = (shape + 1 + rndi(2)) % 3;  // random shape per beat, different from the previous one
                 hue = fmodf(hue + 0.09f + rndi(40) / 1000.0f, 1);
                 __typeof__(wv[0]) *w = &wv[next]; next = (next + 1) % NWAVE;  // reuse the oldest
                 w->on = 1; w->x = ox; w->y = oy; w->r = 0; w->shape = shape; w->id = ++wave_id;
