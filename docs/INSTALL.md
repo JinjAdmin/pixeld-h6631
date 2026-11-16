@@ -101,7 +101,7 @@ After about 30 s you can log in with `ssh root@<ip>` (busybox has no sftp; use `
 - If Wi-Fi can't connect, the display opens the `govee-pixel-setup` hotspot and shows its password on the panel.
   With the panel still disconnected, check `/data/custom/wpa_supplicant.conf` over the serial console instead.
 - Once SSH works: unplug the power, remove the serial wires, reconnect the two ribbon cables and the two-wire
-  harness, and close the case.
+  harness, then snap the halves back together. The screws only hold the bezel, which is optional.
 
 ## Rollback to stock
 Over SSH or serial:

@@ -112,8 +112,9 @@ It shows a summary and waits for your OK. Then it runs these steps, about 5 minu
 6. Switches to the new slot, reboots, and checks that it came up.
 
 ### 5. Close it up
-Unplug the power, remove the serial wires, reconnect the two ribbon cables and the two-wire harness, and screw the
-case back together. When it powers up, the panel shows the clock.
+Unplug the power, remove the serial wires, and reconnect the two ribbon cables and the two-wire harness. The two
+halves then just snap back together. The screws only hold the bezel; putting it back on is optional (it looks good
+without it too). When it powers up, the panel shows the clock.
 - `ssh root@<display-ip>` logs you in with your key; updates from here on go over SSH.
 - If the display can't join your Wi-Fi, it opens a `govee-pixel-setup` hotspot and shows its password on the
   panel. You can also start it any time by holding the Mode button for 5 s.
