@@ -62,9 +62,10 @@ install, the Govee app can't reach the display any more. So while it still runs 
 
 Missed one? Roll back to stock (`--rollback`), load it in the app, and run the installer again.
 
-Everything you apply is stored on the display, and the install leaves it there. pixel2mqtt converts the
-built-in animations now; importing these app-loaded scenes is coming in the next version. Govee's and other
-people's artwork is for personal use on your own display only.
+Everything you apply is stored on the display, and the install leaves it there. pixel2mqtt's **Import built-in
+animations & icons** button converts these along with the built-ins (they appear as "App <code>", since the app
+keeps no titles on the device; rename them as you like). Govee's and other people's artwork is for personal use
+on your own display only.
 
 ### 1. Get the installer
 Download `pixeld-installer-<version>.zip` from the

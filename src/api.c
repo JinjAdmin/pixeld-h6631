@@ -15,7 +15,9 @@
 //   GET    /api/frame                     the last rendered frame (4992 bytes RGB)
 //   GET    /api/files/<kind>              kind = anims | icons | sounds; JSON list
 //   GET|PUT|DELETE /api/files/<kind>/<file>
-//   GET    /api/res?path=/usr/res/...     read-only stock resources (file, or JSON listing for a directory)
+//   GET    /api/res?path=/usr/res/...     read-only stock resources (file, or JSON listing for a directory);
+//                                         also the scene folders the Govee app filled while on stock firmware:
+//                                         /mnt/UDISK/data/{gif,gra_file,looplay_A,big_data,dial_mode,dial_effect}
 // Other auth: "Authorization: Bearer <token>". Tokens live in /data/custom/api.tokens (one per line).
 // UDP 7778: a datagram starting with "pixel2mqtt?" is answered with the /api/info JSON (LAN discovery).
 // While a paired client long-polls /api/events with mqtt=1, pixeld's own MQTT client stays off (pixel2mqtt owns MQTT).
@@ -129,6 +131,24 @@ static void info_json(sb_t *s) {
 }
 
 /* ------------------------------------------------------------------ files */
+// Paths /api/res may read: the stock resources, and the scene folders the Govee app wrote (read-only, no "..").
+static int under(const char *p, const char *dir) {
+    size_t n = strlen(dir);
+    return !strncmp(p, dir, n) && (p[n] == 0 || p[n] == '/');
+}
+static int res_allowed(const char *p) {
+    static const char *app[] = {"gif", "gra_file", "looplay_A", "big_data", "dial_mode", "dial_effect"};
+    char d[64];
+    if (strstr(p, "..")) return 0;
+    if (under(p, "/usr/res")) return 1;
+    if (!strcmp(p, "/mnt/UDISK/data")) return 1;   // listing only shows which folders exist
+    for (size_t i = 0; i < sizeof app / sizeof *app; i++) {
+        snprintf(d, sizeof d, "/mnt/UDISK/data/%s", app[i]);
+        if (under(p, d)) return 1;
+    }
+    return 0;
+}
+
 // stat() is unusable in the zig/glibc-2.29 ARM build (it always fails: the libc stub's struct stat/__xstat
 // handling doesn't match the device glibc), so probe paths with opendir/open+lseek instead.
 // Returns 0 = missing, 1 = regular file (size set), 2 = directory.
@@ -377,7 +397,9 @@ static void dispatch(conn_t *k) {
     }
     if (!strcmp(path, "/api/res")) {
         char rp[300];
-        if (query_get(k->path, "path", rp, sizeof rp) || strncmp(rp, "/usr/res", 8) || (rp[8] && rp[8] != '/') || strstr(rp, "..")) { reply_err(k, "400 Bad Request", "path must be under /usr/res"); return; }
+        if (query_get(k->path, "path", rp, sizeof rp) || !res_allowed(rp)) {
+            reply_err(k, "400 Bad Request", "path must be under /usr/res or a Govee app scene folder in /mnt/UDISK/data"); return;
+        }
         int pk = path_kind(rp, NULL);
         if (!pk) { reply_err(k, "404 Not Found", "not found"); return; }
         if (pk == 1) { reply_file(k, rp); return; }

@@ -40,7 +40,7 @@ straight to disk.
 | `GET /api/frame` | token | the last rendered frame (4992 bytes RGB) |
 | `GET /api/files/<anims\|icons\|sounds>` | token | JSON list (sounds include the read-only built-ins) |
 | `GET\|PUT\|DELETE /api/files/<kind>/<file>` | token | `.anim`/`.clock`, `.pxi`, `.mp3/.wav/.ogg` |
-| `GET /api/res?path=/usr/res/…` | token | read-only stock resources (file, or JSON listing for a directory) |
+| `GET /api/res?path=/usr/res/…` | token | read-only stock resources (file, or JSON listing for a directory). Also the scene folders the Govee app filled before the install: `/mnt/UDISK/data/{gif,gra_file,looplay_A,big_data,dial_mode,dial_effect}` |
 
 The token goes in `Authorization: Bearer <token>`. Tokens are stored in `/data/custom/api.tokens` (up to 8).
 
