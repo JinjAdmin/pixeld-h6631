@@ -44,6 +44,7 @@ jobs:
           cp -r firmware/overlay firmware/data-custom "$D/firmware/"
           cp README.md LICENSE "$D/"
           cp docs/INSTALL.md "$D/docs/"
+          cp -r docs/images "$D/docs/"
           echo "$V" > "$D/installer/VERSION"
           (cd "$D" && find . -type f ! -name SHA256SUMS | sort | xargs sha256sum > SHA256SUMS)
           zip -qr "$D.zip" "$D"
