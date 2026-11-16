@@ -318,7 +318,7 @@ def choose_mqtt(args, has_conf):
             say("\nHow should Home Assistant talk to this display?\n"
                 "  1) through pixel2mqtt (recommended): no MQTT login on the display, one bridge for all your\n"
                 "     displays, plus the web editor. Set up pixel2mqtt after this.\n"
-                "  2) directly to your MQTT broker: no pixel2mqtt needed")
+                "  2) standalone: directly to your MQTT broker, without pixel2mqtt")
             if has_conf:
                 say("  3) keep the direct MQTT login this display already has")
             dflt = "3" if has_conf else "1"
@@ -604,6 +604,8 @@ def main():
         pathlib.Path("rootfs-custom.sqfs").write_bytes(img)
         say(f"rootfs-custom.sqfs {len(img)} bytes md5 {hashlib.md5(img).hexdigest()}")
         return
+    ver = HERE / "VERSION"   # written into release zips
+    say("pixeld installer " + (ver.read_text().strip() if ver.is_file() else "(from a git checkout)"))
     try:
         rollback(args) if args.rollback else install(args)
     except KeyboardInterrupt:

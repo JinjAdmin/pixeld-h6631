@@ -3,8 +3,9 @@
 **Unofficial custom firmware for the Govee H6631 Gaming Pixel Light** (52×32 RGB pixel display).
 It replaces Govee's apps with **pixeld**, a small local-only display daemon:
 - no cloud connection;
-- Home Assistant over MQTT, either directly or through
-  [pixel2mqtt](https://github.com/SamWiIIiams/pixel2mqtt) (bridge and web editor);
+- Home Assistant over MQTT through [pixel2mqtt](https://github.com/SamWiIIiams/pixel2mqtt), the recommended
+  setup: one bridge for all your displays, plus a web editor for animations and icons. (For a standalone
+  install, the display can also connect straight to your MQTT broker.)
 - a LAN API for uploads, previews and live frames.
 
 > Not affiliated with or endorsed by Govee. Installing this means opening the device, using its serial console
@@ -37,63 +38,95 @@ in `/usr/res`. [pixel2mqtt](https://github.com/SamWiIIiams/pixel2mqtt) converts 
 click, using the scene renderer in `tools/graffiti.py`.
 
 ## Installation
-This is the overview. The full commands are in [docs/INSTALL.md](docs/INSTALL.md); read it all before you start.
+A PC program, `installer/pixeld_install.py`, does the whole install over the display's serial console. The only
+manual parts are opening the case and connecting three wires. (Doing it by hand instead:
+[docs/INSTALL.md](docs/INSTALL.md).)
 
 **You need:**
 - a **T6H** Torx screwdriver and a plastic pry tool;
-- an **ESP32 dev board** to use as a USB-serial adapter (most ESP32 boards work) and four jumper wires.
-  This guide is written for an ESP32, but any 3.3 V serial adapter that supports 1 500 000 baud also works:
-  USB-serial adapters with an FT232R, CP2102N, CH340 or CH343 chip (not the original CP2102, which is too slow),
-  or a Raspberry Pi's GPIO UART (`/dev/ttyAMA0`). With those, wire TX→RX and RX→TX;
-- a PC with Linux or WSL, `squashfs-tools` and [Zig](https://ziglang.org/) 0.13;
-- about an hour.
+- an **ESP32 dev board** as the USB-serial adapter (most ESP32 boards work) and four jumper wires. Any 3.3 V
+  serial adapter that supports 1 500 000 baud also works: FT232R, CP2102N, CH340 or CH343 based (not the original
+  CP2102, which is too slow), or a Raspberry Pi's GPIO UART;
+- a PC with **Python 3.8+** (Windows, macOS or Linux; nothing else to install);
+- the display **set up in the Govee Home app and on your Wi-Fi**. The installer uses that connection, and the
+  custom firmware keeps the same Wi-Fi settings;
+- about 30 minutes.
 
-### 1. Open the case
+### 1. Get the installer
+Download `pixeld-installer-<version>.zip` from the
+[latest release](https://github.com/SamWiIIiams/pixeld-h6631/releases/latest) and unzip it. It contains the
+installer, pixeld and bled built for the display, and the firmware scripts. No Govee software or artwork is
+included.
+
+(From a git checkout instead, build the programs first with `sh build.sh`; see [Building](#building).)
+
+### 2. Open the case
 <!-- photos to come -->
 1. Unplug the power.
 2. Remove the **four T6H Torx screws** and take off the bezel.
-3. Carefully pry the case in half. It comes apart easily, but go slowly: the halves are joined by
-   **two ribbon cables and a small two-wire harness**. Disconnect them before you pull the halves fully apart;
-   don't yank them.
-4. Leave the cables disconnected. The controller board boots and flashes fine without the LED panel attached;
-   you only reconnect it once the new firmware is installed.
+3. Carefully pry the case in half. Go slowly: the halves are joined by **two ribbon cables and a small two-wire
+   harness**. Disconnect them before you pull the halves apart.
+4. Leave them disconnected until the install is done. The controller board boots and flashes without the panel.
 
-### 2. Connect the serial console
+### 3. Connect the serial console
 The controller board (`H6631_MAIN_V1.4`) has four pads labelled `GND TX RX VCC5V`, next to the 12 V input.
-The ESP32 board's own USB-serial chip does the work; the ESP32 itself is held in reset so it stays off the line.
-- On the ESP32 board, connect **EN to GND** (holds the ESP32 in reset).
-- Connect the display's **GND→GND, TX→TX0 and RX→RX0**. These are *not* crossed, because you're wiring straight
-  to the USB chip's lines.
-- **Don't connect `VCC5V`.** The display powers itself from its own supply, and the board's pins are 3.3 V.
-- Plug the ESP32 into your PC, open its serial port at **1500000 8N1** (PuTTY, `picocom`, or
-  `scripts/uart_cmd.ps1`), then plug the display back in. After the boot messages you get a root shell
-  (`root@Govee:/#`) with no login.
 
-### 3. Back up, build, flash
-All on the serial console, following [docs/INSTALL.md](docs/INSTALL.md):
-1. **Back up every flash partition** to your PC. The backup holds your Wi-Fi credentials and device keys, so keep
-   it private.
-2. Set `bootdelay` to 3, so you can always reach U-Boot and switch back to stock.
-3. On the PC, build the custom root filesystem **from your own stock backup** with `firmware/build_rootfs.sh`, and
-   build pixeld with `build.sh`. No Govee software or artwork comes from this repo.
-4. Write the image to the unused A/B slot. The stock firmware stays untouched in the other slot.
-5. Put your Wi-Fi settings, SSH public key and the programs in `/data/custom`.
-6. Switch to the new slot and reboot.
+| Display pad | ESP32 board |
+|---|---|
+| GND | GND |
+| TX | TX0 |
+| RX | RX0 |
+| VCC5V | not connected |
+| | EN to GND (a jumper on the ESP32) |
 
-### 4. Check it, close it up
-- After about 30 s, `ssh root@<display-ip>` should work (key only).
-- From here on, updates and recovery work over SSH. Unplug the power, disconnect the serial adapter, reconnect the
-  two ribbon cables and the two-wire harness, and screw the case back together. Keep the adapter in case you ever
-  need U-Boot to roll back.
-- Power it up: the panel shows the clock. If Wi-Fi doesn't connect, the display opens a `govee-pixel-setup`
-  hotspot and shows its password on the panel.
+- **EN to GND** holds the ESP32 in reset, so its USB-serial chip works as a plain adapter. That's also why TX goes
+  to TX0 and RX to RX0 (not crossed). With any other adapter, cross them: TX→RX, RX→TX.
+- **Don't connect `VCC5V`**: the display powers itself, and its pins are 3.3 V.
+- Plug the ESP32 into the PC and the display into its power.
 
-### 5. Home Assistant
-Install [pixel2mqtt](https://github.com/SamWiIIiams/pixel2mqtt) and adopt the display (it shows a pairing code).
-Then click **Import built-in animations & icons** to convert the stock artwork that's already on your device.
+### 4. Run the installer
+```sh
+python installer/pixeld_install.py     # run it from the unzipped folder
+```
+It asks for:
+- **the serial port**, if there's more than one;
+- **your time zone**, with a suggestion from your PC's;
+- **how Home Assistant should connect**: through [pixel2mqtt](https://github.com/SamWiIIiams/pixel2mqtt)
+  (recommended), or, for a standalone install without pixel2mqtt, directly to your MQTT broker (address, user,
+  password).
 
-**Going back to stock** is one command that switches the boot slot back
-(see [Rollback](docs/INSTALL.md#rollback-to-stock)).
+It shows a summary and waits for your OK. Then it runs these steps, about 5 minutes in all:
+1. **Backs up the whole flash** to a `h6631-backup-<date>` folder on the PC and checks every copy. The backup holds
+   your Wi-Fi credentials and device keys: keep it private.
+2. Sets `bootdelay=3`, so you can always reach the bootloader over serial.
+3. **Builds the custom firmware from your own device's stock firmware.** Nothing of Govee's is downloaded or
+   included in this repo.
+4. **Writes it to the unused A/B slot.** The stock firmware in the other slot is never touched.
+5. Installs pixeld, your SSH key (`~/.ssh/id_ed25519.pub` or similar; it offers to create one) and the settings.
+6. Switches to the new slot, reboots, and checks that it came up.
+
+### 5. Close it up
+Unplug the power, remove the serial wires, reconnect the two ribbon cables and the two-wire harness, and screw the
+case back together. When it powers up, the panel shows the clock.
+- `ssh root@<display-ip>` logs you in with your key; updates from here on go over SSH.
+- If the display can't join your Wi-Fi, it opens a `govee-pixel-setup` hotspot and shows its password on the
+  panel. You can also start it any time by holding the Mode button for 5 s.
+
+### 6. Home Assistant
+**With pixel2mqtt (recommended):** install [pixel2mqtt](https://github.com/SamWiIIiams/pixel2mqtt), adopt the
+display in its web UI (a pairing code appears on the panel), then click **Import built-in animations & icons** to
+convert the stock artwork that's already on your device. The display then appears in Home Assistant, and the web
+editor can upload GIFs, draw icons and build layered animations.
+
+**Standalone (direct MQTT):** the display shows up in Home Assistant by itself through MQTT discovery. You can
+add pixel2mqtt later: adopting the display hands MQTT over to it.
+
+### Going back to stock
+Your stock firmware is still in the other slot. With the serial console connected:
+```sh
+python installer/pixeld_install.py --rollback
+```
+Your pixeld settings stay in `/data/custom`, so you can switch back the same way.
 
 ## Layout
 | Path | |
@@ -101,6 +134,7 @@ Then click **Import built-in animations & icons** to convert the stock artwork t
 | `src/pixeld.c` (+ `features.c`, `api.c`) | Display daemon (single-threaded, 30 fps, unity build) |
 | `src/bled.c` | BLE thermometer bridge |
 | `src/pixeltest.c` | Panel test tool |
+| `installer/` | The PC installer: serial console, backup, SquashFS builder, flashing |
 | `firmware/` | Rootfs build script, init overlay, and the persistent `/data/custom` scripts (autostart, Wi-Fi manager, chime) |
 | `tools/` | PC tools: animation/icon converters, Govee scene renderer, UDP/MQTT test clients |
 | `scripts/` | Windows helpers for the serial console and for writing the Wi-Fi/MQTT configs |

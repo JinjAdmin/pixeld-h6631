@@ -1,5 +1,9 @@
 # Installing pixeld on an H6631
 
+> **Most people should use the installer** (`python installer/pixeld_install.py`, see the README). It does every
+> step below automatically. This page is the manual method, for doing it by hand, recovering from a problem,
+> or understanding what the installer does.
+
 Read the whole guide first. You need:
 - an **ESP32 dev board** used as a USB-serial adapter (most ESP32 boards work). This guide uses an ESP32, but any
   3.3 V serial adapter that does **1 500 000 baud** works too: FT232R, CP2102N, CH340 or CH343 adapters (not the

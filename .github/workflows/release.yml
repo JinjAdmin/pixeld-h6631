@@ -1,0 +1,64 @@
+# Push a tag like v0.1.0 -> builds pixeld/bled and publishes pixeld-installer-<tag>.zip as a GitHub release.
+# Run it by hand (workflow_dispatch) to get the zip as a build artifact without making a release.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Zig 0.13.0
+        run: |
+          curl -sSfL -o "$RUNNER_TEMP/zig.tar.xz" https://ziglang.org/download/0.13.0/zig-linux-x86_64-0.13.0.tar.xz
+          echo "d45312e61ebcc48032b77bc4cf7fd6915c11fa16e4aad116b66c9468211230ea  $RUNNER_TEMP/zig.tar.xz" | sha256sum -c -
+          tar -xJf "$RUNNER_TEMP/zig.tar.xz" -C "$RUNNER_TEMP"
+          echo "ZIG=$RUNNER_TEMP/zig-linux-x86_64-0.13.0/zig" >> "$GITHUB_ENV"
+
+      - name: Build device programs
+        run: sh build.sh
+
+      - name: Checks
+        run: |
+          python3 -m py_compile installer/*.py
+          sh -n installer/device_install.sh
+          sh -n installer/switch_slot.sh
+          file build/pixeld build/bled | tee /dev/stderr | grep -c "ARM, EABI5" | grep -qx 2
+          python3 installer/pixeld_install.py --help > /dev/null
+
+      - name: Package
+        run: |
+          V="${GITHUB_REF_NAME//\//-}"
+          D="pixeld-installer-$V"
+          mkdir -p "$D/installer/bin" "$D/firmware" "$D/docs"
+          cp installer/*.py installer/*.sh "$D/installer/"
+          cp build/pixeld build/bled "$D/installer/bin/"
+          cp -r firmware/overlay firmware/data-custom "$D/firmware/"
+          cp README.md LICENSE "$D/"
+          cp docs/INSTALL.md "$D/docs/"
+          echo "$V" > "$D/installer/VERSION"
+          (cd "$D" && find . -type f ! -name SHA256SUMS | sort | xargs sha256sum > SHA256SUMS)
+          zip -qr "$D.zip" "$D"
+          sha256sum "$D.zip" > "$D.zip.sha256"
+          echo "ZIP=$D.zip" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pixeld-installer
+          path: pixeld-installer-*.zip*
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" "$ZIP" "$ZIP.sha256" --title "$GITHUB_REF_NAME" \
+            --notes-file .github/release-notes.md
