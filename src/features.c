@@ -614,11 +614,18 @@ static void music_render(double t) {
             memcpy(fb, efb, FRAME);
         }
         break;
-    default:  // wave: mirrored spectrum around the middle line
-        for (int x = 0; x < W; x++) {
-            int h = (int)(bands[x] * 15);
-            hsv(x / (float)W + (float)fmod(t * 0.05, 1.0), 1, 1, c);
-            for (int y = -h; y <= h; y++) px(x, 16 + y, c);
+    default:  // wave: mirrored spectrum around the middle line, one colour shading to a neighbouring hue outward
+        {
+            // The whole wave is one hue at the middle line that blends into a second shade (hue + 0.16) at the
+            // tips; the pair drifts round the colour wheel over about 40 s. fmod on the double keeps the phase exact
+            // with absolute time (casting t*k to float/int loses precision or overflows).
+            float base = (float)fmod(t / 40.0, 1.0);
+            uint8_t row[16][3];
+            for (int d = 0; d < 16; d++) hsv(fmodf(base + 0.16f * d / 15.0f, 1), 1, 1, row[d]);
+            for (int x = 0; x < W; x++) {
+                int h = (int)(bands[x] * 15);
+                for (int y = -h; y <= h; y++) px(x, 16 + y, row[y < 0 ? -y : y]);
+            }
         }
         break;
     }
