@@ -23,19 +23,18 @@ import struct
 from minipng import read_png
 
 W, H = 52, 32
-# Motion direction K -> screen direction (dx, dy) in timed ("combo", type != 0) scenes. Govee moves the *source
-# offset* there, so the picture travels opposite to the offset change: K=1 moves the image DOWN. Confirmed on the
-# panel: Gliding (parachute, type 0xff, K=1) must fall.
-# Plain stacked scenes (type 0) move the other way: K=1 moves UP. Confirmed with Govee-app scenes: smoke (K=1) must
-# rise out of a pipe, leaves (K=8) must fall. So do the *foreground* layers of timed scenes (falling petals and
-# leaves with K=7, grass blowing the same way as the leaves); their backgrounds and frame groups keep the timed
-# direction (Banana, Coffee Cat, Triple Mushrooms, Gliding all confirmed). Item.flip marks the flipped items.
+# Motion direction K -> screen direction (dx, dy). Horizontal: K=3 right, K=4 left everywhere (Coffee Cat clouds,
+# Banana backgrounds, app-scene grass and blossoms). Vertical depends on the layer:
+# - timed ("combo", type != 0) scenes, backgrounds and the frame group: K=1 moves DOWN (Gliding's parachute must
+#   fall; Banana and Triple Mushrooms confirmed);
+# - plain stacked scenes (type 0) and the foreground group of timed scenes: K=1 moves UP (smoke rises out of a pipe,
+#   Med Kit's plus signs rise, leaves/petals with K=7/K=8 fall). Item.flip marks these; only dy flips.
 DX = {0: (0, 0), 1: (0, 1), 2: (0, -1), 3: (1, 0), 4: (-1, 0), 5: (1, 1), 6: (-1, 1), 7: (1, -1), 8: (-1, -1)}
 
 
 def direction(K, flip=False):
     dx, dy = DX.get(K, (0, 0))
-    return (-dx, -dy) if flip else (dx, dy)
+    return (dx, -dy) if flip else (dx, dy)
 
 
 class Item:
