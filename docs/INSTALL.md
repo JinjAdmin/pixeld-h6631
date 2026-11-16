@@ -1,7 +1,9 @@
 # Installing pixeld on an H6631
 
 Read the whole guide first. You need:
-- a 3.3 V USB-serial adapter that can do **1 500 000 baud** (a CP2102 works);
+- an **ESP32 dev board** used as a USB-serial adapter (most ESP32 boards work). This guide uses an ESP32, but any
+  3.3 V serial adapter that does **1 500 000 baud** works too: FT232R, CP2102N, CH340 or CH343 adapters (not the
+  original CP2102), or a Raspberry Pi's GPIO UART (`/dev/ttyAMA0`);
 - a Linux machine or WSL with `squashfs-tools`;
 - Zig 0.13;
 - about an hour.
@@ -10,9 +12,17 @@ Read the whole guide first. You need:
 slot, and U-Boot can always be reached over serial once `bootdelay` is set (step 4).
 
 ## 1. Serial console
-- Open the case. The controller board (`H6631_MAIN_V1.4`) has four pads, `GND TX RX VCC5V`, next to the 12 V input.
-- Connect **GND, TX and RX only** (TX→RX and RX→TX). **Don't** connect `VCC5V`: the device powers itself, and the
-  T113 pins are 3.3 V.
+- Open the case (power unplugged):
+  - Remove the four T6H Torx screws and take off the bezel.
+  - Carefully pry the case in half. Two ribbon cables and a small two-wire harness join the halves; disconnect
+    them before pulling the halves apart.
+  - Leave them disconnected for the whole procedure: the controller board boots and flashes without the LED panel.
+    Reconnect the cables after step 8, once SSH works.
+- The controller board (`H6631_MAIN_V1.4`) has four pads, `GND TX RX VCC5V`, next to the 12 V input.
+- **ESP32 wiring:** connect the board's **EN to GND** so the ESP32 stays in reset and its USB-serial chip acts as a
+  plain adapter. Then display **GND→GND, TX→TX0, RX→RX0** (not crossed: these are the USB chip's lines).
+- **Any other adapter:** GND→GND, TX→RX, RX→TX (crossed).
+- **Don't** connect `VCC5V`: the device powers itself, and the T113 pins are 3.3 V.
 - BOOT0 prints at 115200 baud. Everything after it (U-Boot, kernel, shell) runs at **1500000 8N1**.
 - The console ends in a **root shell with no login** (`root@Govee:/#`). `scripts/uart_cmd.ps1` sends one command
   and logs the reply. `scripts/uart_capture.ps1` just records.
@@ -85,6 +95,9 @@ fw_setenv boot_partition bootA; fw_setenv root_partition rootfsA; fw_setenv syst
 After about 30 s you can log in with `ssh root@<ip>` (busybox has no sftp; use `scp -O`).
 - `/data/custom/boot.log` has the init log, and `pixeld.log` the daemon's.
 - If Wi-Fi can't connect, the display opens the `govee-pixel-setup` hotspot and shows its password on the panel.
+  With the panel still disconnected, check `/data/custom/wpa_supplicant.conf` over the serial console instead.
+- Once SSH works: unplug the power, remove the serial wires, reconnect the two ribbon cables and the two-wire
+  harness, and close the case.
 
 ## Rollback to stock
 Over SSH or serial:

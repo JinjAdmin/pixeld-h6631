@@ -492,6 +492,23 @@ static size_t put_len(uint8_t *b, size_t len) { size_t i = 0; do { uint8_t d = l
 static size_t put_str(uint8_t *b, const char *s, size_t n) { b[0] = n >> 8; b[1] = n & 255; memcpy(b + 2, s, n); return n + 2; }
 
 static void mq_close(void) { if (mq >= 0) close(mq); mq = -1; rxn = 0; mq_next_try = now_s() + 10; }
+static int send_all(const uint8_t *b, size_t n);
+// Clean MQTT DISCONNECT that never fires our will ("offline"). Closing a socket that still has unread data makes
+// Linux send a reset, the broker may then treat it as a dropped connection and publish the will. So: drain what
+// the broker sent, send DISCONNECT, half-close, and wait (up to 1 s) for the broker to close its side first.
+static void mq_disconnect(void) {
+    if (mq < 0) return;
+    uint8_t junk[512], dc[2] = {0xE0, 0};
+    while (recv(mq, junk, sizeof junk, MSG_DONTWAIT) > 0) {}
+    send_all(dc, 2);
+    shutdown(mq, SHUT_WR);
+    for (int i = 0; i < 10; i++) {
+        struct pollfd p = {mq, POLLIN, 0};
+        if (poll(&p, 1, 100) <= 0) continue;
+        if (recv(mq, junk, sizeof junk, MSG_DONTWAIT) <= 0) break;   // 0 = broker closed: done
+    }
+    close(mq); mq = -1; rxn = 0;
+}
 
 static int api_capturing;  // api.c: collecting publishes for GET /api/discovery instead of sending them
 static void api_outbox(const char *topic, const void *payload, size_t n, int retain);
@@ -1023,7 +1040,7 @@ int main(void) {
         }
         if (mq >= 0 && managed) {  // hand over without publishing "offline" (the bridge reports availability)
             logf_("pixel2mqtt connected: closing direct MQTT");
-            uint8_t dc[2] = {0xE0, 0}; send_all(dc, 2); close(mq); mq = -1; rxn = 0;
+            mq_disconnect();
         }
         api_tick();
         if (mq >= 0 && t - mq_last_tx > 20) { uint8_t ping[2] = {0xC0, 0}; if (send_all(ping, 2) < 0) mq_close(); }
@@ -1059,7 +1076,7 @@ int main(void) {
             next_frame = now_s() + 1.0 / 30;  // up to 30 fps
         }
     }
-    if (mq >= 0) { mq_pub(BASE "/status", "offline", 1); uint8_t dc[2] = {0xE0, 0}; send_all(dc, 2); close(mq); }
+    if (mq >= 0) { mq_pub(BASE "/status", "offline", 1); mq_disconnect(); }
     mic_stop();
     d_reset(); d_deinit();
     logf_("stopped");
