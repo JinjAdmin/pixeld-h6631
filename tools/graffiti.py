@@ -27,7 +27,9 @@ W, H = 52, 32
 # offset* there, so the picture travels opposite to the offset change: K=1 moves the image DOWN. Confirmed on the
 # panel: Gliding (parachute, type 0xff, K=1) must fall.
 # Plain stacked scenes (type 0) move the other way: K=1 moves UP. Confirmed with Govee-app scenes: smoke (K=1) must
-# rise out of a pipe, leaves (K=8) must fall. Item.flip marks type-0 items.
+# rise out of a pipe, leaves (K=8) must fall. So do the *foreground* layers of timed scenes (falling petals and
+# leaves with K=7, grass blowing the same way as the leaves); their backgrounds and frame groups keep the timed
+# direction (Banana, Coffee Cat, Triple Mushrooms, Gliding all confirmed). Item.flip marks the flipped items.
 DX = {0: (0, 0), 1: (0, 1), 2: (0, -1), 3: (1, 0), 4: (-1, 0), 5: (1, 1), 6: (-1, 1), 7: (1, -1), 8: (-1, -1)}
 
 
@@ -69,7 +71,7 @@ def parse_graffiti(d: bytes):
             E = d[pos + 6]
             pos += 8
             it = Item(read_png(png)[2], K, A, B, C, D, E)
-            it.flip = gtype == 0
+            it.flip = gtype == 0 or g == 2   # stacked scene, or the foreground group of a timed one
             items.append(it)
         groups.append(items)
     return bg, gtype, groups
