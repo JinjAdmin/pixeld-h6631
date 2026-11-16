@@ -135,7 +135,8 @@ without it too). When it powers up, the panel shows the clock.
   panel. You can also start it any time by holding the Mode button for 5 s.
 
 ### 6. Home Assistant
-**With pixel2mqtt (recommended):** install [pixel2mqtt](https://github.com/SamWiIIiams/pixel2mqtt), adopt the
+**With pixel2mqtt (recommended):** install [pixel2mqtt](https://github.com/SamWiIIiams/pixel2mqtt) (as a Docker
+container, or as an app on Home Assistant OS via [pixel2mqtt-addon](https://github.com/SamWiIIiams/pixel2mqtt-addon)), adopt the
 display in its web UI (a pairing code appears on the panel), then click **Import built-in animations & icons** to
 convert the stock artwork that's already on your device. The display then appears in Home Assistant, and the web
 editor can upload GIFs, draw icons and build layered animations.
