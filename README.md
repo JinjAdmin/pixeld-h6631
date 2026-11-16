@@ -52,6 +52,20 @@ manual parts are opening the case and connecting three wires. (Doing it by hand 
   custom firmware keeps the same Wi-Fi settings;
 - about 30 minutes.
 
+### Before you start: load the Govee scenes you want
+The display only ships with part of Govee's library: about 60 built-in animations. The rest (150+ scenes and
+everything in the app's community Share Space) is sent from the Govee Home app when you pick it. After the
+install, the Govee app can't reach the display any more. So while it still runs the stock firmware:
+- open each scene or DIY you'd like to keep in the Govee Home app and **apply it to the display** once (saving
+  it in the app isn't enough: it has to be sent to the panel);
+- skip any firmware update the app offers.
+
+Missed one? Roll back to stock (`--rollback`), load it in the app, and run the installer again.
+
+Everything you apply is stored on the display, and the install leaves it there. pixel2mqtt converts the
+built-in animations now; importing these app-loaded scenes is coming in the next version. Govee's and other
+people's artwork is for personal use on your own display only.
+
 ### 1. Get the installer
 Download `pixeld-installer-<version>.zip` from the
 [latest release](https://github.com/SamWiIIiams/pixeld-h6631/releases/latest) and unzip it. It contains the
