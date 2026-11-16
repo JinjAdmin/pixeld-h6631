@@ -45,8 +45,8 @@ manual parts are opening the case and connecting three wires. (Doing it by hand 
 **You need:**
 - a **T6H** Torx screwdriver and a plastic pry tool;
 - an **ESP32 dev board** as the USB-serial adapter (most ESP32 boards work) and four jumper wires. Any 3.3 V
-  serial adapter that supports 1 500 000 baud also works: FT232R, CP2102N, CH340 or CH343 based (not the original
-  CP2102, which is too slow), or a Raspberry Pi's GPIO UART;
+  serial adapter that supports 1 500 000 baud also works: FT232R, CP2102, CH340 or CH343 based, or a Raspberry
+  Pi's GPIO UART;
 - a PC with **Python 3.8+** (Windows, macOS or Linux; nothing else to install);
 - the display **set up in the Govee Home app and on your Wi-Fi**. The installer uses that connection, and the
   custom firmware keeps the same Wi-Fi settings;
@@ -61,15 +61,20 @@ included.
 (From a git checkout instead, build the programs first with `sh build.sh`; see [Building](#building).)
 
 ### 2. Open the case
-<!-- photos to come -->
 1. Unplug the power.
-2. Remove the **four T6H Torx screws** and take off the bezel.
-3. Carefully pry the case in half. Go slowly: the halves are joined by **two ribbon cables and a small two-wire
-   harness**. Disconnect them before you pull the halves apart.
+2. Remove the **four T6H Torx screws**, one in each corner, and take off the bezel.
+3. Carefully pry the case in half from the back, starting at a corner. Go slowly: the halves are joined by
+   **two ribbon cables and a small two-wire harness**. Disconnect them before you pull the halves apart.
 4. Leave them disconnected until the install is done. The controller board boots and flashes without the panel.
 
+<img src="docs/images/01-bezel-screw.jpg" alt="Removing a T6H bezel screw" width="260"> <img src="docs/images/02-pry-case.jpg" alt="Prying the case open from a corner" width="462">
+<img src="docs/images/03-case-open-cables.jpg" alt="The opened case: two ribbon cables and a two-wire harness join the halves" width="260">
+
 ### 3. Connect the serial console
-The controller board (`H6631_MAIN_V1.4`) has four pads labelled `GND TX RX VCC5V`, next to the 12 V input.
+The controller board (`H6631_MAIN_V1.4`) has four pads labelled `GND TX RX VCC5V`, next to the 12 V input
+(left edge of the board below). Male jumper pins pushed into the pad holes hold well enough; no soldering needed.
+
+<img src="docs/images/04-main-board.jpg" alt="The H6631 main board; the serial pads are on the left edge next to the 12 V input" width="260"> <img src="docs/images/05-serial-pads.jpg" alt="Jumper wires in the GND, TX and RX pads; VCC5V left empty" width="260">
 
 | Display pad | ESP32 board |
 |---|---|
@@ -83,6 +88,8 @@ The controller board (`H6631_MAIN_V1.4`) has four pads labelled `GND TX RX VCC5V
   to TX0 and RX to RX0 (not crossed). With any other adapter, cross them: TX→RX, RX→TX.
 - **Don't connect `VCC5V`**: the display powers itself, and its pins are 3.3 V.
 - Plug the ESP32 into the PC and the display into its power.
+
+<img src="docs/images/06-esp32-tx0-rx0.jpg" alt="ESP32 board: wires on TX0, RX0 and GND" width="260"> <img src="docs/images/07-esp32-en-gnd.jpg" alt="ESP32 board: EN jumpered to GND" width="260">
 
 ### 4. Run the installer
 ```sh

@@ -6,8 +6,8 @@
 
 Read the whole guide first. You need:
 - an **ESP32 dev board** used as a USB-serial adapter (most ESP32 boards work). This guide uses an ESP32, but any
-  3.3 V serial adapter that does **1 500 000 baud** works too: FT232R, CP2102N, CH340 or CH343 adapters (not the
-  original CP2102), or a Raspberry Pi's GPIO UART (`/dev/ttyAMA0`);
+  3.3 V serial adapter that does **1 500 000 baud** works too: FT232R, CP2102, CH340 or CH343 adapters, or a Raspberry
+  Pi's GPIO UART (`/dev/ttyAMA0`);
 - a Linux machine or WSL with `squashfs-tools`;
 - Zig 0.13;
 - about an hour.
