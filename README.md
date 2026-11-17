@@ -3,7 +3,7 @@
 **Unofficial custom firmware for the Govee H6631 Gaming Pixel Light** (52×32 RGB pixel display).
 It replaces Govee's apps with **pixeld**, a small local-only display daemon:
 - no cloud connection;
-- Home Assistant over MQTT through [pixel2mqtt](https://github.com/SamWiIIiams/pixel2mqtt), the recommended
+- Home Assistant over MQTT through [pixel2mqtt](https://github.com/JinjAdmin/pixel2mqtt), the recommended
   setup: one bridge for all your displays, plus a web editor for animations and icons. (For a standalone
   install, the display can also connect straight to your MQTT broker.)
 - a LAN API for uploads, previews and live frames.
@@ -34,7 +34,7 @@ It replaces Govee's apps with **pixeld**, a small local-only display daemon:
   See [docs/API.md](docs/API.md).
 
 **No Govee artwork is included.** The display's own firmware still contains Govee's stock animations and icons
-in `/usr/res`. [pixel2mqtt](https://github.com/SamWiIIiams/pixel2mqtt) converts them on your device with one
+in `/usr/res`. [pixel2mqtt](https://github.com/JinjAdmin/pixel2mqtt) converts them on your device with one
 click, using the scene renderer in `tools/graffiti.py`.
 
 ## Installation
@@ -69,7 +69,7 @@ on your own display only.
 
 ### 1. Get the installer
 Download `pixeld-installer-<version>.zip` from the
-[latest release](https://github.com/SamWiIIiams/pixeld-h6631/releases/latest) and unzip it. It contains the
+[latest release](https://github.com/JinjAdmin/pixeld-h6631/releases/latest) and unzip it. It contains the
 installer, pixeld and bled built for the display, and the firmware scripts. No Govee software or artwork is
 included.
 
@@ -112,7 +112,7 @@ python installer/pixeld_install.py     # run it from the unzipped folder
 It asks for:
 - **the serial port**, if there's more than one;
 - **your time zone**, with a suggestion from your PC's;
-- **how Home Assistant should connect**: through [pixel2mqtt](https://github.com/SamWiIIiams/pixel2mqtt)
+- **how Home Assistant should connect**: through [pixel2mqtt](https://github.com/JinjAdmin/pixel2mqtt)
   (recommended), or, for a standalone install without pixel2mqtt, directly to your MQTT broker (address, user,
   password).
 
@@ -135,8 +135,8 @@ without it too). When it powers up, the panel shows the clock.
   panel. You can also start it any time by holding the Mode button for 5 s.
 
 ### 6. Home Assistant
-**With pixel2mqtt (recommended):** install [pixel2mqtt](https://github.com/SamWiIIiams/pixel2mqtt) (as a Docker
-container, or as an app on Home Assistant OS via [pixel2mqtt-addon](https://github.com/SamWiIIiams/pixel2mqtt-addon)), adopt the
+**With pixel2mqtt (recommended):** install [pixel2mqtt](https://github.com/JinjAdmin/pixel2mqtt) (as a Docker
+container, or as an app on Home Assistant OS via [pixel2mqtt-addon](https://github.com/JinjAdmin/pixel2mqtt-addon)), adopt the
 display in its web UI (a pairing code appears on the panel), then click **Import built-in animations & icons** to
 convert the stock artwork that's already on your device. The display then appears in Home Assistant, and the web
 editor can upload GIFs, draw icons and build layered animations.

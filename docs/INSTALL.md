@@ -112,5 +112,5 @@ If slot A doesn't boot, stop at the U-Boot `=>` prompt and run
 `setenv boot_partition bootB; setenv root_partition rootfsB; setenv systemAB_next B; saveenv; boot`.
 
 ## Then
-Install [pixel2mqtt](https://github.com/SamWiIIiams/pixel2mqtt). Adopt the display (a code appears on the panel),
+Install [pixel2mqtt](https://github.com/JinjAdmin/pixel2mqtt). Adopt the display (a code appears on the panel),
 then click **Import built-in animations & icons** to convert the stock artwork stored on your device.
