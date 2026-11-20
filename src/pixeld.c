@@ -49,7 +49,12 @@ static void logf_(const char *fmt, ...) {
     va_end(ap);
 }
 
+#ifdef PIXELD_STUB_DISPLAY
+static double stub_now;  // host builds: a fixed clock for reproducible renders (tools/screen_preview.c)
+static double now_s(void) { if (stub_now > 0) return stub_now; struct timeval tv; gettimeofday(&tv, NULL); return tv.tv_sec + tv.tv_usec / 1e6; }
+#else
 static double now_s(void) { struct timeval tv; gettimeofday(&tv, NULL); return tv.tv_sec + tv.tv_usec / 1e6; }
+#endif
 
 /* ------------------------------------------------------------------ display */
 static int (*d_init)(void), (*d_deinit)(void), (*d_reset)(void), (*d_lumi)(uint8_t);
@@ -133,6 +138,7 @@ static char effect_name[32] = "Flow";  // persisted effect (features.c)
 static int music_style, info_rotate = 8;   // features.c
 static int clock12 = 0, temp_f = 1;          // display prefs: 12-hour clock, Fahrenheit
 static char clock_style[32] = "Digital";     // "Digital", "Analog" or a clock-scene label
+static char scr_pin[48];                     // HA "Screen" select: "" = Auto (info rotation), else a screen name
 static void draw_analog(void);               // features.c
 static char cd_sound[48] = "Alarm";      // features.c
 static double vol_shown_until;  // show the volume overlay until this time
@@ -273,7 +279,7 @@ static const char *sound_file(const char *name) {
 static void state_save(void) {
     FILE *f = fopen(STATE_FILE ".tmp", "w");
     if (!f) return;
-    fprintf(f, "on=%d\nbright=%d\nmode=%d\nvol=%d\nsound=%s\nanim=%s\neffect=%s\nmstyle=%d\nrotate=%d\ncdsound=%s\nclock12=%d\ntempf=%d\nclockstyle=%s\ntext=%s\n", st.on, st.bright, st.mode, chime_vol, door_sound, anim_name, effect_name, music_style, info_rotate, cd_sound, clock12, temp_f, clock_style, st.text);
+    fprintf(f, "on=%d\nbright=%d\nmode=%d\nvol=%d\nsound=%s\nanim=%s\neffect=%s\nmstyle=%d\nrotate=%d\ncdsound=%s\nclock12=%d\ntempf=%d\nclockstyle=%s\nscreen=%s\ntext=%s\n", st.on, st.bright, st.mode, chime_vol, door_sound, anim_name, effect_name, music_style, info_rotate, cd_sound, clock12, temp_f, clock_style, scr_pin, st.text);
     fclose(f); rename(STATE_FILE ".tmp", STATE_FILE);
 }
 static void state_load(void) {
@@ -292,6 +298,7 @@ static void state_load(void) {
         else if (!strncmp(l, "cdsound=", 8)) snprintf(cd_sound, sizeof cd_sound, "%s", l + 8);
         else if (!strncmp(l, "clock12=", 8)) clock12 = atoi(l + 8) ? 1 : 0;
         else if (!strncmp(l, "tempf=", 6)) temp_f = atoi(l + 6) ? 1 : 0;
+        else if (!strncmp(l, "screen=", 7)) snprintf(scr_pin, sizeof scr_pin, "%s", l + 7);
         else if (!strncmp(l, "clockstyle=", 11)) { if (!strcmp(l + 11, "1")) snprintf(clock_style, sizeof clock_style, "Analog");
                                                      else if (l[11] && strcmp(l + 11, "0")) snprintf(clock_style, sizeof clock_style, "%s", l + 11); }
         else if (!strncmp(l, "anim=", 5)) snprintf(anim_name, sizeof anim_name, "%s", l + 5);
@@ -422,8 +429,9 @@ static void render(void) {
     if (m == M_PLAYLIST) {
         if (pl_idx < 0 || t >= pl_next) playlist_advance(t);
         m = !strcasecmp(pl_kind, "text") ? M_TEXT : !strcasecmp(pl_kind, "animation") ? M_ANIM : !strcasecmp(pl_kind, "effect") ? M_EFFECT
-          : !strcasecmp(pl_kind, "music") ? M_MUSIC : !strcasecmp(pl_kind, "info") ? M_INFO : M_CLOCK;
+          : !strcasecmp(pl_kind, "music") ? M_MUSIC : !strcasecmp(pl_kind, "info") || !strcasecmp(pl_kind, "screen") ? M_INFO : M_CLOCK;
     }
+    scr_pl_pin = (st.mode == M_PLAYLIST && !strcasecmp(pl_kind, "screen") && pl_arg[0]) ? pl_arg : NULL;
     switch (m) {
     case M_CLOCK: draw_clock(); break;
     case M_TEXT: draw_scroll(st.text, 12, C_TEXT, st.text_start); break;
@@ -543,6 +551,7 @@ static void publish_state(void) {
     mq_pub(BASE "/clock12/state", clock12 ? "ON" : "OFF", 1);
     mq_pub(BASE "/fahrenheit/state", temp_f ? "ON" : "OFF", 1);
     mq_pub(BASE "/clock_style/state", clock_style, 1);
+    mq_pub(BASE "/screen/state", scr_pin[0] ? scr_pin : "Auto", 1);
 }
 
 static void publish_discovery(void) {
@@ -614,6 +623,17 @@ static void publish_discovery(void) {
                  "\"ops\":[%s],\"icon\":\"mdi:clock-outline\",%s}", ops, dev);
     }
     mq_pub(DISC "/select/govee_pixel_clock_style/config", b, 1);
+    {
+        static char sb[4096]; size_t o = 0;
+        o += snprintf(sb + o, sizeof sb - o, "{\"name\":\"Screen\",\"uniq_id\":\"govee_pixel_screen\",\"cmd_t\":\"" BASE "/screen/set\","
+                      "\"stat_t\":\"" BASE "/screen/state\",\"icon\":\"mdi:monitor-dashboard\",\"ops\":[\"Auto\"");
+        for (int i = 0; i < nscr && o < sizeof sb - 200; i++) {
+            if (strchr(scrs[i]->name, '"') || strchr(scrs[i]->name, '\\')) continue;
+            o += snprintf(sb + o, sizeof sb - o, ",\"%s\"", scrs[i]->name);
+        }
+        snprintf(sb + o, sizeof sb - o, "],%s}", dev);
+        mq_pub(DISC "/select/govee_pixel_screen/config", sb, 1);
+    }
     snprintf(b, sizeof b, "{\"name\":\"Start countdown\",\"uniq_id\":\"govee_pixel_countdown\",\"cmd_t\":\"" BASE "/countdown_min/set\","
              "\"min\":1,\"max\":180,\"step\":1,\"mode\":\"box\",\"unit_of_meas\":\"min\",\"icon\":\"mdi:timer-sand\",%s}", dev);
     mq_pub(DISC "/number/govee_pixel_countdown/config", b, 1);
@@ -710,8 +730,9 @@ static int json_str(const char *j, const char *key, char *out, size_t on) {
 }
 
 static void on_message(const char *topic, const uint8_t *pl, size_t n) {
+    if (!strcmp(topic, BASE "/values/set")) { values_message(pl, n); return; }  // up to VALUES_MAX, RAM only
     char s[1024]; size_t m = n < sizeof s - 1 ? n : sizeof s - 1; memcpy(s, pl, m); s[m] = 0;
-    if (!strcmp(topic, DISC "/status")) { if (!strcmp(s, "online")) { sound_scan(); anim_scan(); publish_discovery(); publish_state(); } return; }
+    if (!strcmp(topic, DISC "/status")) { if (!strcmp(s, "online")) { sound_scan(); anim_scan(); scr_scan(); publish_discovery(); publish_state(); } return; }
     if (!strcmp(topic, BASE "/power/set")) { st.on = !strcasecmp(s, "ON"); }
     else if (!strcmp(topic, BASE "/chime/set")) {  // "<sound>" or "<sound> <volume>"
         // "<sound>" | "<sound> <volume>" | "doorbell" | "stop"; sound = label or file stem
@@ -769,6 +790,11 @@ static void on_message(const char *topic, const uint8_t *pl, size_t n) {
     }
     else if (!strcmp(topic, BASE "/clock12/set")) clock12 = !strcasecmp(s, "ON") || !strcmp(s, "1");
     else if (!strcmp(topic, BASE "/fahrenheit/set")) temp_f = !strcasecmp(s, "ON") || !strcmp(s, "1");
+    else if (!strcmp(topic, BASE "/screen/set")) {  // "Auto" or a screen name: pins it in info mode
+        if (!strcasecmp(s, "Auto") || !s[0]) scr_pin[0] = 0;
+        else { scr_t *sc = scr_find(s); if (!sc) { logf_("unknown screen '%s'", s); return; } snprintf(scr_pin, sizeof scr_pin, "%s", sc->name); }
+        st.mode = M_INFO; st.on = 1; info_cur = -1;
+    }
     else if (!strcmp(topic, BASE "/clock_style/set")) {
         int ok = !strcasecmp(s, "Digital") || !strcasecmp(s, "Analog");
         for (int i = 0; i < ncsc; i++) if (!strcasecmp(s, csc[i].label)) ok = 1;
@@ -995,6 +1021,7 @@ int main(void) {
     state_load();
     sound_scan();
     anim_scan();
+    scr_scan();
     if (anim_name[0]) anim_load(anim_name, &cur_anim);
     if (st.mode == M_ANIM && !cur_anim.px) st.mode = M_CLOCK;
     playlist_load();

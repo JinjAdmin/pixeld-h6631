@@ -1,0 +1,31 @@
+PXS1
+# Forecast: the next three days, one 16-px column each.
+# Values: forecast.dN.day / .cond / .high / .low for N = 1..3 (see Forecast.bindings.md)
+name   Forecast
+needs  forecast.d1.day forecast.d1.cond forecast.d1.high
+stale  12h
+order  20
+
+line 16 1 16 30 color=#1c1c28
+line 34 1 34 30 color=#1c1c28
+
+# Day 1 (x 0..15)
+text 0 1 w=16 align=center font=tiny color=#78c8ff "{forecast.d1.day|upper}"
+icon 0 7 value=forecast.d1.cond map=sunny:wxs_sunny,clear:wxs_sunny,partlycloudy:wxs_cloudy,cloudy:wxs_cloudy,fog:wxs_fog,hail:wxs_hail,lightning:wxs_thunder,lightning-rainy:wxs_thunder,rainy:wxs_rain,pouring:wxs_rain,snowy:wxs_snow,snowy-rainy:wxs_snow,*:wxs_cloudy if=forecast.d1.cond!=clear-night
+icon 2 7 @moon if=forecast.d1.cond==clear-night
+text 0 21 w=16 align=center font=tiny color=#ffaa5a "{forecast.d1.high|temp}"
+text 0 27 w=16 align=center font=tiny color=#6e96e6 "{forecast.d1.low|temp}"
+
+# Day 2 (x 18..33)
+text 18 1 w=16 align=center font=tiny color=#78c8ff "{forecast.d2.day|upper}"
+icon 18 7 value=forecast.d2.cond map=sunny:wxs_sunny,clear:wxs_sunny,partlycloudy:wxs_cloudy,cloudy:wxs_cloudy,fog:wxs_fog,hail:wxs_hail,lightning:wxs_thunder,lightning-rainy:wxs_thunder,rainy:wxs_rain,pouring:wxs_rain,snowy:wxs_snow,snowy-rainy:wxs_snow,*:wxs_cloudy if=forecast.d2.cond!=clear-night
+icon 20 7 @moon if=forecast.d2.cond==clear-night
+text 18 21 w=16 align=center font=tiny color=#ffaa5a "{forecast.d2.high|temp}"
+text 18 27 w=16 align=center font=tiny color=#6e96e6 "{forecast.d2.low|temp}"
+
+# Day 3 (x 36..51)
+text 36 1 w=16 align=center font=tiny color=#78c8ff "{forecast.d3.day|upper}"
+icon 36 7 value=forecast.d3.cond map=sunny:wxs_sunny,clear:wxs_sunny,partlycloudy:wxs_cloudy,cloudy:wxs_cloudy,fog:wxs_fog,hail:wxs_hail,lightning:wxs_thunder,lightning-rainy:wxs_thunder,rainy:wxs_rain,pouring:wxs_rain,snowy:wxs_snow,snowy-rainy:wxs_snow,*:wxs_cloudy if=forecast.d3.cond!=clear-night
+icon 38 7 @moon if=forecast.d3.cond==clear-night
+text 36 21 w=16 align=center font=tiny color=#ffaa5a "{forecast.d3.high|temp}"
+text 36 27 w=16 align=center font=tiny color=#6e96e6 "{forecast.d3.low|temp}"

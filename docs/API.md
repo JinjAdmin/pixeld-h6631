@@ -18,6 +18,8 @@ These apply when `/data/custom/mqtt.conf` exists and no pixel2mqtt bridge is con
 | `stopwatch` | start, stop, toggle, reset |
 | `playlist` | `kind[:arg]:secs,…`, e.g. `clock:30,info:40,animation:Moon:20` |
 | `weather`, `climate`, `stock`, `score` | JSON for the info screens (see `ha/govee_pixel_package.yaml`) |
+| `values` | flat JSON object of named values for layout screens (see [SCREENS.md](SCREENS.md)) |
+| `screen` | `Auto` or a screen name (pins it in info mode); state on `screen/state` |
 | `clock12`, `fahrenheit`, `info_rotate` | `ON`/`OFF`, seconds |
 
 Published: `<x>/state` for each setting, `status` (online/offline, LWT), `button/<power|mode|color|volume>`
@@ -38,8 +40,9 @@ straight to disk.
 | `GET /api/events?since=N&wait=25&mqtt=1` | token | long-poll of everything pixeld publishes; `reset:true` = re-read discovery |
 | `POST /api/cmd/<x>` | token | body = payload; same as MQTT `govee-pixel/<x>/set` |
 | `GET /api/frame` | token | the last rendered frame (4992 bytes RGB) |
-| `GET /api/files/<anims\|icons\|sounds>` | token | JSON list (sounds include the read-only built-ins) |
-| `GET\|PUT\|DELETE /api/files/<kind>/<file>` | token | `.anim`/`.clock`, `.pxi`, `.mp3/.wav/.ogg` |
+| `GET /api/files/<anims\|icons\|sounds\|screens>` | token | JSON list (sounds include the read-only built-ins) |
+| `GET\|PUT\|DELETE /api/files/<kind>/<file>` | token | `.anim`/`.clock`, `.pxi`, `.mp3/.wav/.ogg`, `.scr` |
+| `GET /api/screens` | token | layout screens with visibility, missing values and parse errors |
 | `GET /api/res?path=/usr/res/…` | token | read-only stock resources (file, or JSON listing for a directory). Also the scene folders the Govee app filled before the install: `/mnt/UDISK/data/{gif,gra_file,looplay_A,big_data,dial_mode,dial_effect}` |
 
 The token goes in `Authorization: Bearer <token>`. Tokens are stored in `/data/custom/api.tokens` (up to 8).

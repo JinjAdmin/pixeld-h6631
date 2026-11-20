@@ -13,7 +13,8 @@
 //                                         (mqtt=1: the caller is connected to the broker and owns MQTT)
 //   POST   /api/cmd/<name>                body = payload; same as MQTT govee-pixel/<name>/set
 //   GET    /api/frame                     the last rendered frame (4992 bytes RGB)
-//   GET    /api/files/<kind>              kind = anims | icons | sounds; JSON list
+//   GET    /api/files/<kind>              kind = anims | icons | sounds | screens; JSON list
+//   GET    /api/screens                   layout screens: name, file, order, visible, missing values, errors
 //   GET|PUT|DELETE /api/files/<kind>/<file>
 //   GET    /api/res?path=/usr/res/...     read-only stock resources (file, or JSON listing for a directory);
 //                                         also the scene folders the Govee app filled while on stock firmware:
@@ -57,6 +58,7 @@ static void sb_js(sb_t *s, const char *p, size_t n) {  // JSON string literal
     }
     sb_raw(s, "\"", 1);
 }
+static void sb_put(void *ctx, const char *d, size_t n) { sb_raw((sb_t *)ctx, d, n); }
 static void sb_free(sb_t *s) { free(s->b); memset(s, 0, sizeof *s); }
 
 /* ------------------------------------------------------------------ tokens, pairing */
@@ -165,6 +167,7 @@ static const kind_t KINDS[] = {
     {"anims", ANIM_DIR, {".anim", ".clock", NULL}, 48u << 20},
     {"icons", ICON_DIR, {".pxi", NULL, NULL}, 2u << 20},
     {"sounds", API_SOUND_DIR, {".mp3", ".wav", ".ogg"}, 16u << 20},
+    {"screens", SCR_DIR, {".scr", NULL, NULL}, 16u << 10},
 };
 static const char *SOUND_DIRS_RW[] = {API_SOUND_DIR, "/data/custom/sounds"};
 static const char *SOUND_DIRS_RO[] = {"/usr/res/sound/tips", "/usr/res/sound"};
@@ -388,6 +391,7 @@ static void dispatch(conn_t *k) {
         if (ob_seq != k->since || wait == 0) { events_reply(k); return; }
         k->st = 3; k->wait_until = t + wait; return;
     }
+    if (!strcmp(path, "/api/screens") && !strcmp(m, "GET")) { sb_t s = {0}; scr_json(sb_put, &s); reply_sb(k, "200 OK", &s); return; }
     if (!strncmp(path, "/api/cmd/", 9) && !strcmp(m, "POST")) {
         const char *name = path + 9;
         if (!*name || strlen(name) > 40 || strspn(name, "abcdefghijklmnopqrstuvwxyz0123456789_") != strlen(name)) { reply_err(k, "400 Bad Request", "bad command"); return; }
@@ -449,8 +453,9 @@ static void upload_done(conn_t *k) {
     // light sanity check of the container formats
     const char *dot = strrchr(k->up_name, '.'); char magic[4] = {0};
     FILE *f = fopen(k->up_tmp, "rb"); if (f) { if (fread(magic, 1, 4, f) != 4) memset(magic, 0, 4); fclose(f); }
-    if ((!strcasecmp(dot, ".anim") && memcmp(magic, "PXA1", 4)) || (!strcasecmp(dot, ".pxi") && memcmp(magic, "PXI1", 4))) {
-        unlink(k->up_tmp); reply_err(k, "400 Bad Request", "not a PXA1/PXI1 file"); return;
+    if ((!strcasecmp(dot, ".anim") && memcmp(magic, "PXA1", 4)) || (!strcasecmp(dot, ".pxi") && memcmp(magic, "PXI1", 4)) ||
+        (!strcasecmp(dot, ".scr") && memcmp(magic, "PXS1", 4))) {
+        unlink(k->up_tmp); reply_err(k, "400 Bad Request", "not a PXA1/PXI1/PXS1 file"); return;
     }
     if (rename(k->up_tmp, k->up_dst)) { unlink(k->up_tmp); reply_err(k, "500 Internal Server Error", strerror(errno)); return; }
     logf_("api: stored %s (%zu bytes)", k->up_dst, k->got);
@@ -519,7 +524,7 @@ static void api_tick(void) {
     }
     if (api_rescan_at && t >= api_rescan_at && !api_busy_upload()) {
         api_rescan_at = 0;
-        sound_scan(); anim_scan();
+        sound_scan(); anim_scan(); scr_scan();
         publish_discovery(); publish_state();  // new dropdown options (MQTT and/or the bridge)
     }
     if (pair_until && t >= pair_until) { pair_until = 0; logf_("pairing timed out"); }
@@ -560,4 +565,5 @@ static void api_init(void) {
     tokens_load();
     if (ntokens) api_last_poll = now_s() - MANAGED_TIMEOUT + 30;  // 30 s for the bridge to reconnect after a pixeld restart
     mkdir(API_SOUND_DIR, 0755);
+    mkdir(SCR_DIR, 0755);
 }

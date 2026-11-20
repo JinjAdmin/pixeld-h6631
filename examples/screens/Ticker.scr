@@ -1,0 +1,26 @@
+PXS1
+# Ticker: one stock or coin with price, change and a sparkline.
+# All values use the prefix `ticker.`. For several symbols, duplicate the screen and rename the
+# values (btc.*, eth.*, spx.*). See Ticker.bindings.md.
+name   Ticker
+needs  ticker.symbol ticker.price
+stale  1d
+order  60
+
+# Coin badge (drawn, no artwork) when ticker.crypto is set: BTC and ETH have their own, any other symbol gets a
+# gold coin with its first letter. Stocks start the symbol at x=1.
+icon 1 1 "@coin:{ticker.symbol}" if=ticker.crypto
+text 12 2 font=small color=#ffffff "{ticker.symbol|upper}" if=ticker.crypto
+text 1 2 font=small color=#ffffff "{ticker.symbol|upper}" if=!ticker.crypto
+
+# Change, top right, coloured by direction
+text 28 3 w=24 align=right font=tiny color="ticker.change>0:#28dc50;ticker.change<0:#ff3c3c;#b4b4b4" "{ticker.change|pct|sign}"
+
+# Direction arrow, then the price (prefix such as "$"; cents only under 1,000)
+icon 1 14 @up color=#28dc50 if=ticker.change>0
+icon 1 14 @down color=#ff3c3c if=ticker.change<0
+text 7 12 w=45 overflow=shrink font=small color=#ffcd3c "{ticker.prefix}{ticker.price|thousands}" if=ticker.price>=1000
+text 7 12 w=45 overflow=shrink font=small color=#ffcd3c "{ticker.prefix}{ticker.price|dec:2}" if=ticker.price<1000
+
+# Sparkline across the bottom, coloured like the change
+spark 0 21 52 11 series=ticker.spark area=1 dot=1 color="ticker.change>0:#28dc50;ticker.change<0:#ff3c3c;#b4b4b4"

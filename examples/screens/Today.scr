@@ -1,0 +1,35 @@
+PXS1
+# Today: weather icon, clock, temperature with high/low, date, sunrise/sunset.
+# Values: weather.condition weather.temp weather.high weather.low weather.humidity sun.rise sun.set (see Today.bindings.md)
+name   Today
+needs  weather.condition weather.temp
+stale  6h
+order  10
+
+# Weather icon (15x18) from the display's icon library, keyed by HA's condition names.
+# Snow wins over rain for snowy-rainy, as on the old screen. Clear night gets the drawn moon.
+icon 1 1 value=weather.condition map=sunny:wx_sunny,clear:wx_sunny,partlycloudy:wx_cloudy,cloudy:wx_cloudy,fog:wx_fog,hail:wx_hail,lightning:wx_thunder,lightning-rainy:wx_thunder,rainy:wx_rain,pouring:wx_rain,snowy:wx_snow,snowy-rainy:wx_snow,*:wx_cloudy if=weather.condition!=clear-night
+icon 2 3 @moon if=weather.condition==clear-night
+
+# Clock (follows the 12-hour switch). Right-aligned, so the colon is always at x=34 ("14:41" and "4:41");
+# a black patch hides the orange colon and a red one blinks over it.
+text 18 1 w=33 align=right font=small color=#ff8c28 "{time|time}"
+rect 34 1 5 7 fill=1 color=#000000
+text 34 1 font=small color=#ff3c14 blink=500 ":"
+
+# Temperature
+text 20 11 w=18 overflow=shrink font=small color=#ffffff "{weather.temp|temp}°"
+
+# High / low on the right edge
+text 38 9  w=14 align=right font=tiny color=#ffaa5a "{weather.high|temp}"
+text 38 15 w=14 align=right font=tiny color=#6eaaff "{weather.low|temp}"
+
+# Date
+text 0 21 w=52 align=center font=tiny color=#50a0ff "{date}"
+
+# Sunrise (left) and sunset (right); humidity instead when there are no sun times
+icon 0 28 @up color=#ffbe28 if=sun.rise
+text 6 27 font=tiny color=#9696a0 "{sun.rise|time}"
+icon 27 28 @down color=#ff6e28 if=sun.set
+text 33 27 w=19 align=right font=tiny color=#9696a0 "{sun.set|time}"
+text 0 27 w=52 align=center font=tiny color=#6eaaff "HUM {weather.humidity|int}%" if="!sun.rise && weather.humidity"

@@ -1,0 +1,11 @@
+{
+  "printer.status": "running",
+  "printer.name": "Benchy v2 0.2mm PLA",
+  "printer.progress": 42,
+  "printer.layer": 87,
+  "printer.layers": 210,
+  "printer.remaining": 75,
+  "printer.nozzle": 220,
+  "printer.bed": 60,
+  "printer.end_time": "2026-11-19T15:12:00-05:00"
+}

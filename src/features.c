@@ -31,7 +31,9 @@ static void addpx(uint8_t *buf, int x, int y, const uint8_t *c) {
 }
 
 /* ------------------------------------------------------------------ icons (.pxi in /mnt/UDISK/icons) */
+#ifndef ICON_DIR  // overridable for the host preview build (tools/screen_preview.c)
 #define ICON_DIR "/mnt/UDISK/icons"
+#endif
 typedef struct { char name[32]; int w, h, n, total; uint16_t *delay; uint8_t *rgba; } icon_t;
 static icon_t icons[48]; static int nicons;
 
@@ -93,6 +95,9 @@ static const struct { char c; uint8_t r[5]; } T3[] = {
     {'M',{5,7,7,5,5}},{'N',{6,5,5,5,5}},{'O',{7,5,5,5,7}},{'P',{7,5,7,4,4}},{'Q',{7,5,5,7,1}},{'R',{6,5,6,5,5}},
     {'S',{7,4,7,1,7}},{'T',{7,2,2,2,2}},{'U',{5,5,5,5,7}},{'V',{5,5,5,5,2}},{'W',{5,5,7,7,5}},{'X',{5,5,2,5,5}},
     {'Y',{5,5,2,2,2}},{'Z',{7,1,2,4,7}},
+    {',',{0,0,0,2,4}},{'!',{2,2,2,0,2}},{'?',{7,1,2,0,2}},{'(',{1,2,2,2,1}},{')',{4,2,2,2,4}},{'=',{0,7,0,7,0}},
+    {'_',{0,0,0,0,7}},{'$',{3,6,2,3,6}},{'#',{5,7,5,7,5}},{'<',{1,2,4,2,1}},{'>',{4,2,1,2,4}},{'\'',{2,2,0,0,0}},
+    {'"',{5,5,0,0,0}},
 };
 static int tiny_w(const char *s) { int n = (int)strlen(s); return n ? n * 4 - 1 : 0; }
 static int tiny_text(const char *s, int x, int y, const uint8_t *c) {
@@ -777,8 +782,11 @@ static int screen_score(int i) {
     return 1;
 }
 
-// screen ids: 0 weather, 10+i climate, 20+i stock, 30+i score
+#include "screens.c"
+
+// screen ids: 0 weather, 10+i climate, 20+i stock, 30+i score, 100+i layout screens (.scr)
 static int info_draw_id(int id) {
+    if (id >= 100) { if (id - 100 >= nscr || !scr_visible(scrs[id - 100], now_s())) return 0; scr_render(scrs[id - 100], now_s()); return 1; }
     if (id == 0) return screen_weather();
     if (id >= 10 && id < 10 + NCLIM) return screen_climate(id - 10);
     if (id >= 20 && id < 20 + NSTOCK) return screen_stock(id - 20);
@@ -786,20 +794,32 @@ static int info_draw_id(int id) {
     return 0;
 }
 static void info_render(double t) {
-    static const int order[] = {0, 10, 11, 12, 13, 14, 15, 30, 31, 32, 33, 20, 21, 22, 23, 24, 25};
-    int n = (int)(sizeof order / sizeof order[0]);
+    static const int legacy[] = {0, 10, 11, 12, 13, 14, 15, 30, 31, 32, 33, 20, 21, 22, 23, 24, 25};
+    int order[NSCR + 20], n = 0;
+    for (int i = 0; i < nscr; i++) order[n++] = 100 + i;  // layout screens first (sorted by order, then name)
+    for (size_t i = 0; i < sizeof legacy / sizeof legacy[0]; i++) order[n++] = legacy[i];
+    scr_tick(t);
+    const char *pin = scr_pl_pin ? scr_pl_pin : scr_pin[0] ? scr_pin : NULL;
+    if (pin) {  // one screen pinned (HA "Screen" select or a playlist item): shown even when its rules say no
+        scr_t *s = scr_find(pin);
+        if (s) { memset(fb, 0, sizeof fb); scr_render(s, t); return; }
+    }
     if (info_cur < 0 || t >= info_next) {  // advance to the next screen that has data
-        int start = info_cur < 0 ? -1 : info_cur;
+        int start = -1;
+        for (int i = 0; i < n; i++) if (order[i] == info_cur) start = i;
+        info_cur = -1;
         for (int k = 1; k <= n; k++) {
-            int idx = (start + k) % n;
+            int idx = ((start < 0 ? -1 : start) + k + n) % n;
             memset(fb, 0, sizeof fb);
-            if (info_draw_id(order[idx])) { info_cur = idx; break; }
-            if (k == n) info_cur = -1;
+            if (info_draw_id(order[idx])) { info_cur = order[idx]; break; }
         }
-        info_next = t + info_rotate;
+        int secs = info_rotate;
+        if (info_cur >= 100 && info_cur - 100 < nscr && scrs[info_cur - 100]->time_s) secs = scrs[info_cur - 100]->time_s;
+        info_next = t + secs;
     }
     memset(fb, 0, sizeof fb);
-    if (info_cur < 0 || !info_draw_id(order[info_cur])) {
+    if (info_cur < 0 || !info_draw_id(info_cur)) {
+        if (info_cur >= 0) { info_next = 0; }  // the current screen just went away: move on next frame
         const uint8_t g[3] = {120, 120, 120};
         tiny_text("NO INFO", (W - tiny_w("NO INFO")) / 2, 8, g);
         tiny_text("SEND DATA", (W - tiny_w("SEND DATA")) / 2, 16, g);
@@ -931,7 +951,7 @@ static void playlist_advance(double t) {
     if (!strcasecmp(pl_kind, "effect") && pl_arg[0]) { int e = effect_find(pl_arg); if (e >= 0) effect_start(e); }
     if (!strcasecmp(pl_kind, "music") && pl_arg[0]) for (int i = 0; i < NMSTYLES; i++) if (!strcasecmp(MUSIC_STYLES[i], pl_arg)) music_style = i;
     if (!strcasecmp(pl_kind, "text")) st.text_start = t;
-    if (!strcasecmp(pl_kind, "info")) info_cur = -1;
+    if (!strcasecmp(pl_kind, "info") || !strcasecmp(pl_kind, "screen")) info_cur = -1;
     pl_next = t + secs;
 }
 

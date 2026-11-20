@@ -1,0 +1,5 @@
+{
+  "forecast.d1.day": "FRI", "forecast.d1.cond": "sunny", "forecast.d1.high": [55, "°F"], "forecast.d1.low": [39, "°F"],
+  "forecast.d2.day": "SAT", "forecast.d2.cond": "rainy", "forecast.d2.high": [49, "°F"], "forecast.d2.low": [42, "°F"],
+  "forecast.d3.day": "SUN", "forecast.d3.cond": "snowy", "forecast.d3.high": [36, "°F"], "forecast.d3.low": [28, "°F"]
+}

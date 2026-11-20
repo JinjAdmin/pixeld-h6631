@@ -25,6 +25,9 @@ pixeld uses these names:
 - `nfl_<team>` (15×5) and `nba_<team>` (20×9);
 - `hourglass`, `stopwatch`, and `clk_face`/`clk_left`/`clk_right` for the analog clock.
 
+## `.scr`: layout screen (`/mnt/UDISK/screens`)
+A text file starting with `PXS1`: see [SCREENS.md](SCREENS.md).
+
 ## Sounds
 `.mp3`/`.wav`/`.ogg` files go in `/mnt/UDISK/sounds` or `/data/custom/sounds`; the built-ins are in
 `/usr/res/sound[/tips]`.

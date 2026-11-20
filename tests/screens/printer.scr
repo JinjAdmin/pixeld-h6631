@@ -1,0 +1,16 @@
+PXS1
+name    3D printer
+needs   printer.status printer.progress
+show    printer.status in running,pause,prepare
+linger  printer.status in finish,failed 30m
+stale   1h
+
+text   0 0  w=52 font=tiny align=center overflow=scroll color=#9696af "{printer.name|replace:_= |upper|or:3D PRINT}"
+text   1 7  font=big color=#ffffff "{printer.progress|int}"  if=printer.status==running
+text   1 7  font=big color=#ffcd3c "{printer.progress|int}"  if=printer.status==pause
+text   25 14 font=small "%" color="printer.status==pause:#ffcd3c;#ffffff" if="printer.status in running,pause"
+text   1 11 font=small color=#3cdc78 "DONE!"                 if=printer.status==finish
+rect   36 7 15 15 color=#50556a
+bar    0 23 52 3 value=printer.progress max=100 fill=#00a0ff..#28e678 bg=#1e1e2a pulse=1
+text   0 27 w=30 font=tiny color=#ffa046 "{printer.remaining|dur:min}"
+text   30 27 w=22 font=tiny align=right color=#8c8ca0 "{printer.layer}/{printer.layers}"

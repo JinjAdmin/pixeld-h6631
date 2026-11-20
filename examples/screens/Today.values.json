@@ -1,0 +1,9 @@
+{
+  "weather.condition": "partlycloudy",
+  "weather.temp": [48.2, "°F"],
+  "weather.high": [53, "°F"],
+  "weather.low": [41, "°F"],
+  "weather.humidity": 62,
+  "sun.rise": "2026-11-20T06:56:00-05:00",
+  "sun.set": "2026-11-19T16:33:00-05:00"
+}

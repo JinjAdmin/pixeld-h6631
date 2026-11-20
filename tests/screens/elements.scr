@@ -1,0 +1,18 @@
+PXS1
+# every element type and most options; reference for pixel2mqtt's browser renderer
+name   Elements
+order  5
+bg     #05050a
+
+text  0 0 font=tiny color=#ffcd3c "{t.price|thousands} {t.chg|pct|sign}"
+icon  44 0 @up color=#28dc50 if="t.chg>0"
+icon  44 0 @down color=#ff3c3c if="t.chg<0"
+icon  42 4 @coin:BTC
+spark 0 7 40 9 series=t.spark area=1 dot=1 color="t.spark.trend>0:#28dc50;t.spark.trend<0:#ff3c3c;#b4b4b4"
+text  0 17 w=26 font=small align=center color=#ffffff "{w.temp|temp}°"
+text  26 17 w=26 font=tiny align=right valign=bottom h=7 color=#6eaaff "{w.low|temp}/{w.high|temp}"
+bar   0 25 26 2 value=w.hum max=100 fill=#203060..#50a0ff bg=#101018
+rect  27 25 25 7 color=#303040
+line  27 31 51 25 color=#804040
+pixel 0 31 color=#ffffff
+text  28 26 w=23 font=tiny overflow=shrink color=#9696af "{s.when|time}"
