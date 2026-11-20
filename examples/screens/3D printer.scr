@@ -45,6 +45,6 @@ bar 0 23 52 3 value=printer.progress fill=#ff3c3c bg=#1e1e2a if=printer.status==
 
 # --- Bottom row ---
 text 0 27 w=30 font=tiny color=#ffa046 "{printer.remaining|dur:min}" if=printer.status==running
-text 1 27 font=tiny color=#ffcd3c blink=500 "PAUSED" if=printer.status==pause
+text 1 27 font=tiny color=#ffcd3c blink=1000 "PAUSED" if=printer.status==pause
 text 1 27 font=tiny color=#8c8ca0 "{printer.end_time|ago}" if="printer.status in finish,failed"
 text 26 27 w=26 font=tiny align=right color=#8c8ca0 "{printer.layer}/{printer.layers}" if="printer.status in running,pause"

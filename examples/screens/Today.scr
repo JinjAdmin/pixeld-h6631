@@ -15,7 +15,7 @@ icon 2 3 @moon if=weather.condition==clear-night
 # a black patch hides the orange colon and a red one blinks over it.
 text 18 1 w=33 align=right font=small color=#ff8c28 "{time|time}"
 rect 34 1 5 7 fill=1 color=#000000
-text 34 1 font=small color=#ff3c14 blink=500 ":"
+text 34 1 font=small color=#ff3c14 blink=1000 ":"
 
 # Temperature
 text 20 11 w=18 overflow=shrink font=small color=#ffffff "{weather.temp|temp}°"

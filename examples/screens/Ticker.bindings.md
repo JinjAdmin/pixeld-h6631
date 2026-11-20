@@ -7,6 +7,7 @@ screen on the display, so each copy needs its own prefix.
 | Value | Kind | Example | Suggested source |
 |---|---|---|---|
 | `ticker.symbol` | text | `BTC` | a fixed text (Sample/constant), or a sensor attribute |
+| `ticker.crypto` | on/off | `1` | a fixed value: `1` for a coin (shows a coin badge), leave out for a stock |
 | `ticker.prefix` | text | `$` | a fixed text; leave empty for an index such as the S&P 500 |
 | `ticker.price` | number | `61764.2` | `sensor.<coin>_price`, `sensor.<stock>_price` |
 | `ticker.change` | number, percent | `1.25` | a 24 h change sensor or attribute (e.g. `price_change_percentage_24h`) |
@@ -15,8 +16,9 @@ screen on the display, so each copy needs its own prefix.
 Required: `ticker.symbol` and `ticker.price`. Without `ticker.spark`, the sparkline area stays empty.
 
 ## Coin badges
-`BTC` and `ETH` get the drawn `@coin` badges, and the symbol moves right to make room. Any other symbol is
-shown as text only. To give another coin a badge, edit the two `@coin` lines.
+When `ticker.crypto` is set, the screen draws a coin badge (`"@coin:{ticker.symbol}"`, no artwork) and moves the
+symbol right to make room. BTC and ETH have their own badges; any other symbol gets a gold coin with its first
+letter.
 
 ## Sources
 Home Assistant has no built-in stock integration, so use whatever price sensor you already have: a REST sensor

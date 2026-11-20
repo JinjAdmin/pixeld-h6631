@@ -18,6 +18,11 @@ the words below.
 
 Required: `printer.status` and `printer.progress`.
 
+## Icons
+The print head uses two small icons, `printer_head` (animated) and `printer_head_still`. They're original art in
+`examples/icons/` (`make_printer_head.py` draws them). Upload both to the display's icon library. Without them the
+screen still works, just without the print head.
+
 ## When it shows
 - While printing, paused or preparing, if updated within the last hour.
 - For 30 minutes after `finish` or `failed`, but only if the display saw the status change. A restart doesn't bring

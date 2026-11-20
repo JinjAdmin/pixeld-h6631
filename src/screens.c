@@ -845,7 +845,7 @@ static void scr_render(scr_t *s, double t) {
     cur_stale = s->stale_s;
     for (int i = 0; i < s->nel; i++) {
         int m; if (s->el[i].cond && !cond_eval(s->el[i].cond, &m)) continue;
-        if (s->el[i].blink && phase(t, 500.0 / s->el[i].blink, 2)) continue;  // blink=<ms>: shown for ms, hidden for ms
+        if (s->el[i].blink && phase(t, 1000.0 / s->el[i].blink, 2)) continue;  // blink=<ms>: shown for ms, hidden for ms
         el_draw(&s->el[i], t);
     }
 }

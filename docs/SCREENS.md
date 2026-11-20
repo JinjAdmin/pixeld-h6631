@@ -69,7 +69,7 @@ Durations are written `90s`, `30m`, `2h` or `1d`.
 ## Elements
 
 They are drawn in file order, so later lines are on top. Every element accepts `if=<condition>`,
-`color=<colour or rules>` and `blink=<ms>` (shown for `ms`, hidden for `ms`, 50..10000; phase = `floor(fmod(t * 500/ms, 2))`, hidden when 1).
+`color=<colour or rules>` and `blink=<ms>` (shown for `ms`, hidden for `ms`, 50..10000; phase = `floor(fmod(t * 1000/ms, 2))`, hidden when 1).
 Coordinates are pixels from the top-left (0..51, 0..31). They may be negative or run off the panel, in which case the element is clipped.
 
 ### `text x y [options] "template"`
