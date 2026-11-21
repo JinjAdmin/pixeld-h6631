@@ -1,0 +1,23 @@
+{
+ "market.symbol": "BTC",
+ "market.crypto": 1,
+ "market.prefix": "$",
+ "market.price": 61764.2,
+ "market.change": 1.25,
+ "market.spark": [
+  60120,
+  60410,
+  60380,
+  60790,
+  61020,
+  60870,
+  61150,
+  61210,
+  61340,
+  61080,
+  61420,
+  61590,
+  61510,
+  61764
+ ]
+}

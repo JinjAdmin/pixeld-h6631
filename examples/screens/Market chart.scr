@@ -1,0 +1,26 @@
+PXS1
+# Market chart: the group screen for every symbol in pixel2mqtt's Market group (HA select "Market ticker",
+# one symbol or Rotate). pixel2mqtt publishes market.* for the current member.
+name   Market chart
+needs  market.symbol market.price
+stale  1d
+order  50
+
+# Coin badge (drawn, no artwork) when market.crypto is set: BTC and ETH have their own, any other symbol gets a
+# gold coin with its first letter. Stocks start the symbol at x=1.
+icon 1 1 "@coin:{market.symbol}" if=market.crypto
+text 12 2 w=17 overflow=shrink font=small color=#ffffff "{market.symbol|replace:^=|upper}" if=market.crypto
+text 1 2 w=26 overflow=shrink font=small color=#ffffff "{market.symbol|replace:^=|upper}" if=!market.crypto
+
+# Change, top right, coloured by direction
+text 28 3 w=24 align=right font=tiny color="market.change>0:#28dc50;market.change<0:#ff3c3c;#b4b4b4" "{market.change|pct|sign}"
+
+# Direction arrow, then the price (prefix such as "$"; cents only under 1,000)
+icon 1 14 @up color=#28dc50 if=market.change>0
+icon 1 14 @down color=#ff3c3c if=market.change<0
+text 7 12 w=45 overflow=shrink font=small color=#ffcd3c "{market.prefix}{market.price|thousands}" if=market.price>=1000
+text 7 12 w=45 overflow=shrink font=small color=#ffcd3c "{market.prefix}{market.price|dec:2}" if="market.price<1000 && market.price>=1"
+text 7 12 w=45 overflow=shrink font=small color=#ffcd3c "{market.prefix}{market.price|dec:4}" if=market.price<1
+
+# Sparkline across the bottom, coloured like the change
+spark 0 21 52 11 series=market.spark area=1 dot=1 color="market.change>0:#28dc50;market.change<0:#ff3c3c;#b4b4b4"

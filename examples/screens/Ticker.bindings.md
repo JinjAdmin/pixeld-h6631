@@ -21,8 +21,10 @@ symbol right to make room. BTC and ETH have their own badges; any other symbol g
 letter.
 
 ## Sources
-Home Assistant has no built-in stock integration, so use whatever price sensor you already have: a REST sensor
-(e.g. CoinGecko for crypto), a HACS integration, or a template. The display never fetches anything from the
+Home Assistant has no built-in keyless stock integration. The Easy Stock integration (Home Assistant Marketplace,
+Yahoo Finance, no key) works well: one sensor per symbol (`^GSPC`, `BTC-USD`, ...), state = price, attribute
+`change_pct` = day change in %. Bind `ticker.price` to the state, `ticker.change` to `change_pct` and
+`ticker.spark` to the state's history. Any other price sensor (REST, template) works the same way. The display never fetches anything from the
 internet itself.
 
 ## Price format
