@@ -19,7 +19,8 @@ It replaces Govee's apps with **pixeld**, a small local-only display daemon:
   - images and animations;
   - generative effects: Snake, Bouncing Balls, Match 3, Flow, Fireworks, Starfield, Rain and more;
   - music visualiser, using the built-in microphone;
-  - info screens: weather, room climate, stocks, NFL/NBA scores;
+  - info screens: layouts you design (`.scr`, see [SCREENS.md](docs/SCREENS.md)), filled with Home Assistant values
+    by [pixel2mqtt](https://github.com/JinjAdmin/pixel2mqtt);
   - countdown and stopwatch;
   - a playlist that rotates through all of the above.
 - **Home Assistant:** MQTT discovery for a light, mode/animation/effect selects, text, notify, chime volume,
@@ -161,7 +162,7 @@ Your pixeld settings stay in `/data/custom`, so you can switch back the same way
 | `firmware/` | Rootfs build script, init overlay, and the persistent `/data/custom` scripts (autostart, Wi-Fi manager, chime) |
 | `tools/` | PC tools: animation/icon converters, Govee scene renderer, UDP/MQTT test clients |
 | `scripts/` | Windows helpers for the serial console and for writing the Wi-Fi/MQTT configs |
-| `ha/` | Example Home Assistant package (weather, climate, stocks, scores, notifications) |
+| `ha/` | Example Home Assistant package (notifications) |
 | `docs/` | Hardware notes, install guide, API, file formats |
 
 ## Building

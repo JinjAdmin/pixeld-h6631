@@ -7,7 +7,7 @@ These apply when `/data/custom/mqtt.conf` exists and no pixel2mqtt bridge is con
 | Topic (`govee-pixel/<x>/set`) | Payload |
 |---|---|
 | `power`, `brightness` | `ON`/`OFF`, 1-100 |
-| `mode` | clock, text, image, animation, effect, music, info, countdown, stopwatch, playlist |
+| `mode` | clock, text, image, animation, effect, music, screens, countdown, stopwatch, playlist (`info` is accepted as the old name for screens) |
 | `text` | text to scroll (switches to text mode) |
 | `image` | 4992 raw bytes (52×32 RGB) |
 | `animation`, `effect`, `music_style`, `clock_style` | a name from the matching HA select |
@@ -16,11 +16,10 @@ These apply when `/data/custom/mqtt.conf` exists and no pixel2mqtt bridge is con
 | `sound`, `countdown_sound`, `volume` | doorbell sound, countdown-end sound, 0-100 |
 | `countdown` / `countdown_min` | `m:ss`, `h:mm:ss`, seconds or `stop` / minutes |
 | `stopwatch` | start, stop, toggle, reset |
-| `playlist` | `kind[:arg]:secs,…`, e.g. `clock:30,info:40,animation:Moon:20` |
-| `weather`, `climate`, `stock`, `score` | JSON for the info screens (see `ha/govee_pixel_package.yaml`) |
+| `playlist` | `kind[:arg]:secs,…`, e.g. `clock:30,screens:40,animation:Moon:20` (kinds include `screens` and `screen:<name>`) |
 | `values` | flat JSON object of named values for layout screens (see [SCREENS.md](SCREENS.md)) |
-| `screen` | `Auto` or a screen name (pins it in info mode); state on `screen/state` |
-| `clock12`, `fahrenheit`, `info_rotate` | `ON`/`OFF`, seconds |
+| `screen` | `Auto` or a screen name (pins it in screens mode); state on `screen/state` |
+| `clock12`, `fahrenheit`, `info_rotate` | `ON`/`OFF`, screen rotate seconds (HA: *Screen rotate seconds*) |
 
 Published: `<x>/state` for each setting, `status` (online/offline, LWT), `button/<power|mode|color|volume>`
 (short/long), `countdown/event`, and `sound_level/state` while music mode is on screen.
