@@ -123,7 +123,7 @@ static void text_at(const char *s, int x, int y, const uint8_t *c) { for (; *s; 
 
 /* ------------------------------------------------------------------ state */
 enum { M_CLOCK, M_TEXT, M_IMAGE, M_ANIM, M_EFFECT, M_MUSIC, M_INFO, M_COUNTDOWN, M_STOPWATCH, M_PLAYLIST };
-static const char *MODES[] = {"clock", "text", "image", "animation", "effect", "music", "info", "countdown", "stopwatch", "playlist"};
+static const char *MODES[] = {"clock", "text", "image", "animation", "effect", "music", "screens", "countdown", "stopwatch", "playlist"};
 #define NMODES 10
 static struct {
     int on, bright, mode;
@@ -429,7 +429,7 @@ static void render(void) {
     if (m == M_PLAYLIST) {
         if (pl_idx < 0 || t >= pl_next) playlist_advance(t);
         m = !strcasecmp(pl_kind, "text") ? M_TEXT : !strcasecmp(pl_kind, "animation") ? M_ANIM : !strcasecmp(pl_kind, "effect") ? M_EFFECT
-          : !strcasecmp(pl_kind, "music") ? M_MUSIC : !strcasecmp(pl_kind, "info") || !strcasecmp(pl_kind, "screen") ? M_INFO : M_CLOCK;
+          : !strcasecmp(pl_kind, "music") ? M_MUSIC : !strcasecmp(pl_kind, "screens") || !strcasecmp(pl_kind, "info") || !strcasecmp(pl_kind, "screen") ? M_INFO : M_CLOCK;
     }
     scr_pl_pin = (st.mode == M_PLAYLIST && !strcasecmp(pl_kind, "screen") && pl_arg[0]) ? pl_arg : NULL;
     switch (m) {
@@ -607,7 +607,7 @@ static void publish_discovery(void) {
     snprintf(b, sizeof b, "{\"name\":\"Playlist\",\"uniq_id\":\"govee_pixel_playlist\",\"cmd_t\":\"" BASE "/playlist/set\",\"stat_t\":\"" BASE "/playlist/state\","
              "\"max\":255,\"icon\":\"mdi:playlist-play\",%s}", dev);
     mq_pub(DISC "/text/govee_pixel_playlist/config", b, 1);
-    snprintf(b, sizeof b, "{\"name\":\"Info screen seconds\",\"uniq_id\":\"govee_pixel_info_rotate\",\"cmd_t\":\"" BASE "/info_rotate/set\",\"stat_t\":\"" BASE "/info_rotate/state\","
+    snprintf(b, sizeof b, "{\"name\":\"Screen rotate seconds\",\"uniq_id\":\"govee_pixel_info_rotate\",\"cmd_t\":\"" BASE "/info_rotate/set\",\"stat_t\":\"" BASE "/info_rotate/state\","
              "\"min\":3,\"max\":120,\"step\":1,\"unit_of_meas\":\"s\",\"icon\":\"mdi:timer-sync\",\"ent_cat\":\"config\",%s}", dev);
     mq_pub(DISC "/number/govee_pixel_info_rotate/config", b, 1);
     snprintf(b, sizeof b, "{\"name\":\"12-hour clock\",\"uniq_id\":\"govee_pixel_clock12\",\"cmd_t\":\"" BASE "/clock12/set\",\"stat_t\":\"" BASE "/clock12/state\","
@@ -751,6 +751,7 @@ static void on_message(const char *topic, const uint8_t *pl, size_t n) {
     else if (!strcmp(topic, BASE "/brightness/set")) { int b = atoi(s); if (b >= 1 && b <= 100) { st.bright = b; d_lumi((uint8_t)b); } st.on = 1; }
     else if (!strcmp(topic, BASE "/mode/set")) {
         for (int i = 0; i < NMODES; i++) if (!strcmp(s, MODES[i])) st.mode = i;
+        if (!strcmp(s, "info")) st.mode = M_INFO;   // the mode's old name (playlists and automations)
         if (st.mode == M_ANIM && !cur_anim.px && (!anim_name[0] || anim_load(anim_name, &cur_anim))) st.mode = M_CLOCK;
         st.text_start = now_s();
     }

@@ -1,7 +1,7 @@
 // bled: passive BLE sensor bridge for the repurposed Govee H6631 (RTL8723DS, hci0).
 // Listens to advertisements on a raw HCI socket (no bluetoothd, never connects to anything),
 // decodes thermo-hygrometers and publishes them to MQTT with Home Assistant discovery.
-// Optionally feeds named sensors to pixeld's info screen (govee-pixel/climate/set).
+// To show them on the display, bind their Home Assistant entities in a pixel2mqtt screen.
 //
 // Decoded formats (all unencrypted broadcasts):
 //   * Govee H5072/H5075/H5101/H5102 (mfg 0xEC88, 6 bytes, packed temp/hum)
@@ -366,12 +366,6 @@ static void publish_sensor(sensor_t *s) {
     snprintf(b + n, sizeof b - n, "\"rssi\":%d}", s->rssi);
     snprintf(t, sizeof t, BASE "/ble/%s", id);
     if (mq_pub(t, b, 0) < 0) return;
-    if (s->room >= 0 && (s->fields & F_T)) {  // feed pixeld's climate info screen
-        float tv = cf.fahrenheit ? s->t * 9.0f / 5.0f + 32.0f : s->t;
-        snprintf(b, sizeof b, "{\"name\":\"%s\",\"temp\":%.1f,\"unit\":\"%s\",\"humidity\":%d}", cf.map[s->room].room, tv,
-                 cf.fahrenheit ? "F" : "C", (s->fields & F_H) ? (int)lroundf(s->h) : -1);
-        mq_pub(BASE "/climate/set", b, 0);
-    }
     s->pub = now_s();
 }
 

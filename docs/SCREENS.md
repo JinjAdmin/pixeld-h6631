@@ -166,9 +166,9 @@ Values arrive on one topic, `govee-pixel/values/set` (`<topic>/values/set` under
 - One message is at most 16 KB (the MQTT receive buffer is 16 KB). Send larger updates in several messages.
 
 ## Rotation and Home Assistant
-- **Info mode** cycles through every screen whose `needs`, `show` and `linger` rules let it show, in `order`.
-  The existing built-in info screens (weather, room climate, scores) stay in the rotation until example screens
-  replace them.
+- **Screens mode** (`info` is accepted as the old name) cycles through every screen whose `needs`, `show` and
+  `linger` rules let it show, in `order`. The old built-in weather, climate, stock and score screens are gone; the
+  examples in `examples/screens` replace them.
 - **Playlists:** `screen:<name>:<seconds>`.
 - **HA select "Screen":** `Auto` (rotation) or one screen pinned. A pinned screen shows even when its rules say no;
   missing values print blank.
@@ -272,4 +272,3 @@ so no artwork ships with pixel2mqtt.
 1. Should screens also be usable as **notification overlays** (a screen shown briefly over the current mode when a
    value changes, such as a volume bar or a Wi-Fi icon)? That would cover the pop-up idea with the same files.
 2. Should a `huge` font (3×) exist, or is `big` enough on 32 rows?
-3. Should the legacy weather, climate and scores screens be removed once the examples cover them?

@@ -24,11 +24,6 @@ static void hsv(float h, float s, float v, uint8_t *c) {
 }
 static void fill_rect(int x, int y, int w, int h, const uint8_t *c) { for (int j = 0; j < h; j++) for (int i = 0; i < w; i++) px(x + i, y + j, c); }
 static void fade_fb(uint8_t *buf, int num, int den) { for (int i = 0; i < FRAME; i++) buf[i] = (uint8_t)(buf[i] * num / den); }
-static void addpx(uint8_t *buf, int x, int y, const uint8_t *c) {
-    if (x < 0 || x >= W || y < 0 || y >= H) return;
-    uint8_t *p = &buf[(y * W + x) * 3];
-    for (int k = 0; k < 3; k++) { int v = p[k] + c[k]; p[k] = v > 255 ? 255 : v; }
-}
 
 /* ------------------------------------------------------------------ icons (.pxi in /mnt/UDISK/icons) */
 #ifndef ICON_DIR  // overridable for the host preview build (tools/screen_preview.c)
@@ -111,8 +106,6 @@ static int tiny_text(const char *s, int x, int y, const uint8_t *c) {
     }
     return x;
 }
-static void big_text(const char *s, int x, int y, const uint8_t *c) { for (; *s; s++, x += 12) glyph(*s, x, y, 2, c); }
-static void degree(int x, int y, const uint8_t *c) { px(x + 1, y, c); px(x, y + 1, c); px(x + 2, y + 1, c); px(x + 1, y + 2, c); }
 
 /* ------------------------------------------------------------------ generative effects */
 static const char *EFFECTS[] = {"Snake", "Bouncing Balls", "Match 3", "Color Wall", "Flow", "Line Spray", "Line Fill",
@@ -636,25 +629,8 @@ static void music_render(double t) {
     }
 }
 
-/* ------------------------------------------------------------------ info screens (data pushed by Home Assistant) */
-static struct { char cond[24], unit[4]; float temp, hi, lo; int hum, has_hilo; double upd; } wx;
-#define NCLIM 6
-static struct { char name[16]; float temp; int hum; char unit[4]; double upd; } clim[NCLIM];
-#define NSTOCK 6
-static struct { char sym[10]; char price[12]; float chg; double upd; } stock[NSTOCK];
-#define NSCORE 4
-static struct { char league[8], home[8], away[8], status[16]; int hs, as; double upd; } score[NSCORE];
+/* ------------------------------------------------------------------ layout screens (.scr) rotation */
 static int info_cur = -1; static double info_next;
-
-static const char *wx_icon(const char *c) {
-    if (strstr(c, "lightning")) return "wx_thunder";
-    if (strstr(c, "snow")) return "wx_snow";
-    if (strstr(c, "hail")) return "wx_hail";
-    if (strstr(c, "rain") || strstr(c, "pouring")) return "wx_rain";
-    if (strstr(c, "fog")) return "wx_fog";
-    if (!strcmp(c, "sunny") || !strcmp(c, "clear")) return "wx_sunny";
-    return NULL;  // cloudy, partlycloudy, windy, clear-night, exceptional: handled below
-}
 
 /* ------------------------------------------------------------------ analog clock (Govee face, hands drawn here) */
 static void hand(float cx, float cy, float deg, float len, int thick, const uint8_t *c) {
@@ -713,91 +689,16 @@ static void draw_moon(int x, int y) {
     }
 }
 
-// incoming temps: "unit" field ("F"/"°F"/"C"); without one, assume the unit currently displayed
-static float to_c(const char *s, float v) {
-    char u[8]; int f = json_str(s, "unit", u, sizeof u) ? temp_f : (strchr(u, 'F') || strchr(u, 'f')) ? 1 : 0;
-    return f ? (v - 32.0f) * 5.0f / 9.0f : v;
-}
-static float disp_t(float c) { return temp_f ? c * 9.0f / 5.0f + 32.0f : c; }
-static void fmt_temp(char *b, size_t n, float v) { if (fabsf(v - roundf(v)) < 0.05f || fabsf(v) >= 100) snprintf(b, n, "%d", (int)roundf(v)); else snprintf(b, n, "%.1f", v); }
-
-static int screen_weather(void) {
-    if (!wx.upd || now_s() - wx.upd > 6 * 3600) return 0;
-    const char *ic = wx_icon(wx.cond);
-    if (ic) icon_draw(ic, 1, 3);
-    else if (!strcmp(wx.cond, "clear-night")) draw_moon(2, 5);
-    else icon_draw("wx_cloudy", 1, 3);
-    char t[8]; snprintf(t, sizeof t, "%d", (int)roundf(disp_t(wx.temp)));
-    const uint8_t tc[3] = {255, 255, 255}, hl[3] = {150, 150, 150}, hb[3] = {80, 170, 255};
-    int tw = (int)strlen(t) * 12 - 2, tx = 19 + (33 - tw - 4) / 2;
-    big_text(t, tx, 2, tc); degree(tx + tw + 1, 2, tc);
-    char l[24];
-    if (wx.has_hilo) { snprintf(l, sizeof l, "%d/%d", (int)roundf(disp_t(wx.hi)), (int)roundf(disp_t(wx.lo))); tiny_text(l, 19 + (33 - tiny_w(l)) / 2, 17, hl); }
-    if (wx.hum > 0) { snprintf(l, sizeof l, "%d%%", wx.hum); icon_draw("env_hum", 19, 23); tiny_text(l, 28, 25, hb); }
-    // condition name along the bottom-left under the icon
-    char cn[12]; snprintf(cn, sizeof cn, "%s", wx.cond); for (char *p = cn; *p; p++) if (*p == '-') { *p = 0; break; }
-    if (strlen(cn) > 4) cn[4] = 0;
-    tiny_text(cn, 1, 25, hl);
-    return 1;
-}
-
-static int screen_climate(int i) {
-    if (!clim[i].upd || now_s() - clim[i].upd > 6 * 3600) return 0;
-    const uint8_t nc[3] = {120, 200, 255}, tc[3] = {255, 200, 120}, hc[3] = {120, 180, 255};
-    text_at(clim[i].name, (W - text_w(clim[i].name)) / 2, 1, nc);
-    char b[16]; fmt_temp(b, sizeof b, disp_t(clim[i].temp));
-    icon_draw("env_temp", 3, 12); text_at(b, 13, 13, tc); degree(13 + text_w(b) + 1, 13, tc);
-    if (clim[i].hum >= 0) { snprintf(b, sizeof b, "%d%%", clim[i].hum); icon_draw("env_hum", 3, 22); text_at(b, 13, 23, hc); }
-    return 1;
-}
-
-static int screen_stock(int i) {
-    if (!stock[i].upd || now_s() - stock[i].upd > 24 * 3600) return 0;
-    const uint8_t sc[3] = {255, 255, 255}, up[3] = {40, 220, 80}, dn[3] = {255, 60, 60}, fl[3] = {180, 180, 180};
-    const uint8_t *cc = stock[i].chg > 0.005f ? up : stock[i].chg < -0.005f ? dn : fl;
-    text_at(stock[i].sym, 2, 1, sc);
-    icon_draw(stock[i].chg > 0.005f ? "fin_rise" : stock[i].chg < -0.005f ? "fin_fall" : "fin_flat", W - 11, 0);
-    text_at(stock[i].price, (W - text_w(stock[i].price)) / 2, 12, sc);
-    char b[16]; snprintf(b, sizeof b, "%+.2f%%", stock[i].chg);
-    text_at(b, (W - text_w(b)) / 2, 23, cc);
-    return 1;
-}
-
-static int screen_score(int i) {
-    if (!score[i].upd || now_s() - score[i].upd > 8 * 3600) return 0;
-    const uint8_t tc[3] = {255, 255, 255}, ac[3] = {255, 120, 120}, hc2[3] = {120, 170, 255}, stc[3] = {200, 200, 120};
-    char ia[24], ih[24], lg[8];
-    snprintf(lg, sizeof lg, "%s", score[i].league); for (char *p = lg; *p; p++) *p = (char)tolower((unsigned char)*p);
-    snprintf(ia, sizeof ia, "%s_%s", lg, score[i].away); snprintf(ih, sizeof ih, "%s_%s", lg, score[i].home);
-    for (char *p = ia; *p; p++) *p = (char)tolower((unsigned char)*p);
-    for (char *p = ih; *p; p++) *p = (char)tolower((unsigned char)*p);
-    // away on the left, home on the right; logo if we have it, otherwise the abbreviation
-    if (!icon_draw(ia, 2, 2)) tiny_text(score[i].away, 2, 3, ac);
-    icon_get(ih);
-    icon_t *hic = icon_get(ih);
-    if (hic) icon_draw(ih, W - 2 - hic->w, 2); else tiny_text(score[i].home, W - 2 - tiny_w(score[i].home), 3, hc2);
-    char a[8], h[8]; snprintf(a, sizeof a, "%d", score[i].as); snprintf(h, sizeof h, "%d", score[i].hs);
-    text_at(a, 13 - text_w(a) / 2, 13, ac); text_at("-", 24, 13, tc); text_at(h, 39 - text_w(h) / 2, 13, hc2);
-    tiny_text(score[i].status, (W - tiny_w(score[i].status)) / 2, 25, stc);
-    return 1;
-}
-
 #include "screens.c"
 
-// screen ids: 0 weather, 10+i climate, 20+i stock, 30+i score, 100+i layout screens (.scr)
+// screen ids: 100+i = layout screen i (.scr)
 static int info_draw_id(int id) {
-    if (id >= 100) { if (id - 100 >= nscr || !scr_visible(scrs[id - 100], now_s())) return 0; scr_render(scrs[id - 100], now_s()); return 1; }
-    if (id == 0) return screen_weather();
-    if (id >= 10 && id < 10 + NCLIM) return screen_climate(id - 10);
-    if (id >= 20 && id < 20 + NSTOCK) return screen_stock(id - 20);
-    if (id >= 30 && id < 30 + NSCORE) return screen_score(id - 30);
+    if (id >= 100 && id - 100 < nscr && scr_visible(scrs[id - 100], now_s())) { scr_render(scrs[id - 100], now_s()); return 1; }
     return 0;
 }
 static void info_render(double t) {
-    static const int legacy[] = {0, 10, 11, 12, 13, 14, 15, 30, 31, 32, 33, 20, 21, 22, 23, 24, 25};
-    int order[NSCR + 20], n = 0;
-    for (int i = 0; i < nscr; i++) order[n++] = 100 + i;  // layout screens first (sorted by order, then name)
-    for (size_t i = 0; i < sizeof legacy / sizeof legacy[0]; i++) order[n++] = legacy[i];
+    int order[NSCR + 1], n = 0;
+    for (int i = 0; i < nscr; i++) order[n++] = 100 + i;  // sorted by order, then name
     scr_tick(t);
     const char *pin = scr_pl_pin ? scr_pl_pin : scr_pin[0] ? scr_pin : NULL;
     if (pin) {  // one screen pinned (HA "Screen" select or a playlist item): shown even when its rules say no
@@ -821,61 +722,13 @@ static void info_render(double t) {
     if (info_cur < 0 || !info_draw_id(info_cur)) {
         if (info_cur >= 0) { info_next = 0; }  // the current screen just went away: move on next frame
         const uint8_t g[3] = {120, 120, 120};
-        tiny_text("NO INFO", (W - tiny_w("NO INFO")) / 2, 8, g);
-        tiny_text("SEND DATA", (W - tiny_w("SEND DATA")) / 2, 16, g);
-        tiny_text("FROM HA", (W - tiny_w("FROM HA")) / 2, 22, g);
+        tiny_text("NO SCREENS", (W - tiny_w("NO SCREENS")) / 2, 8, g);
+        tiny_text("MAKE ONE IN", (W - tiny_w("MAKE ONE IN")) / 2, 16, g);
+        tiny_text("PIXEL2MQTT", (W - tiny_w("PIXEL2MQTT")) / 2, 22, g);
     }
 }
 
-static float json_num(const char *s, const char *k, float def) { char v[32]; return json_str(s, k, v, sizeof v) ? def : (float)atof(v); }
-
 static int info_message(const char *topic, const char *s) {
-    char v[64];
-    if (!strcmp(topic, BASE "/weather/set")) {
-        if (json_str(s, "condition", wx.cond, sizeof wx.cond)) snprintf(wx.cond, sizeof wx.cond, "cloudy");
-        for (char *p = wx.cond; *p; p++) *p = (char)tolower((unsigned char)*p);
-        wx.temp = to_c(s, json_num(s, "temp", 0)); wx.hum = (int)json_num(s, "humidity", -1);
-        wx.has_hilo = !json_str(s, "high", v, sizeof v) && strcmp(v, "null") && v[0]; wx.hi = to_c(s, json_num(s, "high", 0)); wx.lo = to_c(s, json_num(s, "low", 0));
-        wx.upd = now_s(); return 1;
-    }
-    if (!strcmp(topic, BASE "/climate/set")) {  // {"name":"Living","temp":21.5,"humidity":44} ; {"name":"Living","remove":1}
-        char name[16]; if (json_str(s, "name", name, sizeof name)) return 1;
-        int slot = -1, free_slot = -1;
-        for (int i = 0; i < NCLIM; i++) { if (clim[i].upd && !strcmp(clim[i].name, name)) slot = i; if (!clim[i].upd && free_slot < 0) free_slot = i; }
-        if (!json_str(s, "remove", v, sizeof v)) { if (slot >= 0) clim[slot].upd = 0; return 1; }
-        if (slot < 0) slot = free_slot; if (slot < 0) slot = 0;
-        snprintf(clim[slot].name, sizeof clim[0].name, "%s", name);
-        clim[slot].temp = to_c(s, json_num(s, "temp", 0)); clim[slot].hum = (int)json_num(s, "humidity", -1); clim[slot].upd = now_s();
-        return 1;
-    }
-    if (!strcmp(topic, BASE "/stock/set")) {  // {"symbol":"AAPL","price":"189.20","change":-1.25}
-        char sym[10]; if (json_str(s, "symbol", sym, sizeof sym)) return 1;
-        int slot = -1, free_slot = -1;
-        for (int i = 0; i < NSTOCK; i++) { if (stock[i].upd && !strcasecmp(stock[i].sym, sym)) slot = i; if (!stock[i].upd && free_slot < 0) free_slot = i; }
-        if (!json_str(s, "remove", v, sizeof v)) { if (slot >= 0) stock[slot].upd = 0; return 1; }
-        if (slot < 0) slot = free_slot; if (slot < 0) slot = 0;
-        snprintf(stock[slot].sym, sizeof stock[0].sym, "%s", sym);
-        if (json_str(s, "price", stock[slot].price, sizeof stock[0].price)) stock[slot].price[0] = 0;
-        stock[slot].chg = json_num(s, "change", 0); stock[slot].upd = now_s();
-        return 1;
-    }
-    if (!strcmp(topic, BASE "/score/set")) {  // {"league":"NFL","away":"BUF","home":"KC","away_score":17,"home_score":21,"status":"Q3 5:12"}
-        char home[8], away[8];
-        if (json_str(s, "home", home, sizeof home) || json_str(s, "away", away, sizeof away)) {
-            if (!strcmp(s, "clear")) for (int i = 0; i < NSCORE; i++) score[i].upd = 0;
-            return 1;
-        }
-        int slot = -1, free_slot = -1;
-        for (int i = 0; i < NSCORE; i++) { if (score[i].upd && !strcasecmp(score[i].home, home) && !strcasecmp(score[i].away, away)) slot = i; if (!score[i].upd && free_slot < 0) free_slot = i; }
-        if (!json_str(s, "remove", v, sizeof v)) { if (slot >= 0) score[slot].upd = 0; return 1; }
-        if (slot < 0) slot = free_slot; if (slot < 0) slot = 0;
-        snprintf(score[slot].home, 8, "%s", home); snprintf(score[slot].away, 8, "%s", away);
-        if (json_str(s, "league", score[slot].league, sizeof score[0].league)) snprintf(score[slot].league, 8, "NFL");
-        score[slot].hs = (int)json_num(s, "home_score", 0); score[slot].as = (int)json_num(s, "away_score", 0);
-        if (json_str(s, "status", score[slot].status, sizeof score[0].status)) score[slot].status[0] = 0;
-        score[slot].upd = now_s();
-        return 1;
-    }
     if (!strcmp(topic, BASE "/info_rotate/set")) { int r = atoi(s); if (r >= 3 && r <= 120) info_rotate = r; return 1; }
     return 0;
 }
@@ -920,7 +773,7 @@ static void stopwatch_render(double t) {
 
 /* ------------------------------------------------------------------ playlist */
 #define PLAYLIST_FILE "/data/custom/playlist.txt"
-static char playlist[256] = "clock:30,info:40,animation:Clock Night:20,effect:Flow:20";
+static char playlist[256] = "clock:30,screens:40,animation:Clock Night:20,effect:Flow:20";
 static int pl_idx = -1; static double pl_next;
 static char pl_kind[16], pl_arg[64];
 
@@ -951,7 +804,7 @@ static void playlist_advance(double t) {
     if (!strcasecmp(pl_kind, "effect") && pl_arg[0]) { int e = effect_find(pl_arg); if (e >= 0) effect_start(e); }
     if (!strcasecmp(pl_kind, "music") && pl_arg[0]) for (int i = 0; i < NMSTYLES; i++) if (!strcasecmp(MUSIC_STYLES[i], pl_arg)) music_style = i;
     if (!strcasecmp(pl_kind, "text")) st.text_start = t;
-    if (!strcasecmp(pl_kind, "info") || !strcasecmp(pl_kind, "screen")) info_cur = -1;
+    if (!strcasecmp(pl_kind, "screens") || !strcasecmp(pl_kind, "info") || !strcasecmp(pl_kind, "screen")) info_cur = -1;
     pl_next = t + secs;
 }
 
