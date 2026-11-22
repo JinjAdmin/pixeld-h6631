@@ -1,3 +1,14 @@
+## What's new in v0.3.0
+- **Layout screens:** info screens are now `.scr` files you design (text, values, icons, bars, sparklines, shapes,
+  conditions, colour rules, blink), filled with Home Assistant values. Design them in
+  [pixel2mqtt](https://github.com/JinjAdmin/pixel2mqtt) (v0.5.0+); the format is in `docs/SCREENS.md`, with examples
+  in `examples/screens`.
+- **Screens mode** replaces Info mode (HA Mode select, MQTT, playlists: `screens:40`). `info` is still accepted.
+  *Info screen seconds* is now *Screen rotate seconds*.
+- HA **Screen** select pins one screen; playlists can show one with `screen:<name>:<seconds>`.
+- **Removed:** the hard-coded weather, room climate, stock and score screens and their `weather/climate/stock/score`
+  topics. bled no longer feeds `climate/set`.
+
 **Install:** download `pixeld-installer-<version>.zip` below, unzip it, wire up the serial console (see the README's
 Installation section), then run:
 
