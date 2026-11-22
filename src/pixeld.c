@@ -562,7 +562,7 @@ static void publish_discovery(void) {
              "\"bri_cmd_t\":\"" BASE "/brightness/set\",\"bri_stat_t\":\"" BASE "/brightness/state\",\"bri_scl\":100,\"icon\":\"mdi:dots-grid\",%s}", dev);
     mq_pub(DISC "/light/govee_pixel/config", b, 1);
     snprintf(b, sizeof b, "{\"name\":\"Mode\",\"uniq_id\":\"govee_pixel_mode\",\"cmd_t\":\"" BASE "/mode/set\",\"stat_t\":\"" BASE "/mode/state\","
-             "\"ops\":[\"clock\",\"text\",\"image\",\"animation\",\"effect\",\"music\",\"info\",\"countdown\",\"stopwatch\",\"playlist\"],\"icon\":\"mdi:view-dashboard\",%s}", dev);
+             "\"ops\":[\"clock\",\"text\",\"image\",\"animation\",\"effect\",\"music\",\"screens\",\"countdown\",\"stopwatch\",\"playlist\"],\"icon\":\"mdi:view-dashboard\",%s}", dev);
     mq_pub(DISC "/select/govee_pixel_mode/config", b, 1);
     snprintf(b, sizeof b, "{\"name\":\"Text\",\"uniq_id\":\"govee_pixel_text\",\"cmd_t\":\"" BASE "/text/set\",\"stat_t\":\"" BASE "/text/state\","
              "\"max\":255,\"icon\":\"mdi:message-text\",%s}", dev);
